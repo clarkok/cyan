@@ -1,0 +1,6 @@
+#ifndef CYAN_LIBCYAN_HPP
+#define CYAN_LIBCYAN_HPP
+
+
+
+#endif //CYAN_LIBCYAN_HPP

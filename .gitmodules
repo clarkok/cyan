@@ -1,0 +1,3 @@
+[submodule "libback"]
+	path = libback
+	url = git@bitbucket.org:clarkok/libback.git
