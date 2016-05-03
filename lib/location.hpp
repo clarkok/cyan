@@ -24,8 +24,12 @@ struct Location
 
 namespace std {
 
-std::string to_string(cyan::Location location)
-{ return location.filename + ":" + std::to_string(location.line) + " " + std::to_string(location.column); }
+static inline std::string
+to_string(cyan::Location location)
+{
+    return location.filename + ":" + std::to_string(location.line + 1) +
+        " " + std::to_string(location.column + 1);
+}
 
 }
 

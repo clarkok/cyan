@@ -178,9 +178,10 @@ Parser::_parseLineComment()
 bool
 Parser::parse()
 {
+    bool result = true;
     _registerReserved();
 
-    while (_peak() != T_EOF && error_nr < ERROR_NR_LIMIT) {
+    while (_peak() != T_EOF) {
         try {
             if (_peak() != T_ID) {
                 throw ParseErrorException(
@@ -190,7 +191,7 @@ Parser::parse()
             }
 
             auto symbol = symbol_table->lookup(peaking_string);
-            if (!symbol || symbol->token_value != Symbol::K_RESERVED) {
+            if (!symbol || symbol->klass != Symbol::K_RESERVED) {
                 throw ParseErrorException(
                     location,
                     "Only concept / define / let / struct allowed to appear here"
@@ -214,9 +215,9 @@ Parser::parse()
             }
         }
         catch (const ParseErrorException &e) {
-            ++error_nr;
-            std::cerr << e.what() << std::endl;
-            while (true) {
+            result = false;
+            error_collector->error(e);
+            while (_peak() != T_EOF) {
                 if (_peak() == T_ID) {
                     auto symbol = symbol_table->lookup(peaking_string);
                     if (symbol && symbol->klass == Symbol::K_RESERVED &&
@@ -233,14 +234,12 @@ Parser::parse()
                 else if (_peak() == T_EOF) {
                     break;
                 }
-                else {
-                    _next();
-                }
+                _next();
             }
         }
     }
 
-    return error_nr == 0;
+    return result;
 }
 
 void
@@ -272,6 +271,8 @@ Parser::parseLetStmt()
             throw ParseExpectErrorException(location, "identifier", _tokenLiteral());
         }
 
+        auto variable_name = peaking_string;
+
         if (symbol_table->lookupDefineScope(peaking_string) == symbol_table->currentScope()) {
             throw ParseRedefinedErrorException(
                 location,
@@ -287,15 +288,15 @@ Parser::parseLetStmt()
         parseExpression();
 
         symbol_table->definedSymbol(
-            peaking_string,
+            variable_name,
             location,
-            peaking_string,
+            variable_name,
             Symbol::K_VARIABLE,
             0,
             false,
             last_type
         );
-    } while (_next() == ',');
+    } while (_peak() == ',');
 
     if (_peak() != ';') {
         throw ParseExpectErrorException(location, "';'", _tokenLiteral());
@@ -319,10 +320,10 @@ Parser::parseAssignmentExpr()
     ) {
         auto op = _peak();
         if (!is_left_value) {
-            throw ParseTypeErrorException(
+            error_collector->error(ParseTypeErrorException(
                 location,
                 "only left value can be assigned"
-            );
+            ));
         }
 
         Type *left_hand_type = last_type;
@@ -332,38 +333,33 @@ Parser::parseAssignmentExpr()
 
         Type *right_hand_type = last_type;
 
-        if (left_hand_type->isNumber() && right_hand_type->isNumber()) {
-            last_type = left_hand_type;
-            is_left_value = true;
+        if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
+            if (op != '=') {
+                error_collector->error(ParseTypeErrorException(
+                    location,
+                    "modify and assign cannot be applied between " + left_hand_type->to_string() + " and " +
+                    right_hand_type->to_string()
+                ));
+            }
+            else if (!left_hand_type->equalTo(right_hand_type)) {
+                if (
+                    !left_hand_type->is<ConceptType>() ||
+                    !right_hand_type->is<StructType>() ||
+                    dynamic_cast<StructType*>(right_hand_type)->implementedConcept(
+                        dynamic_cast<ConceptType*>(left_hand_type)
+                    )
+                ) {
+                    error_collector->error(ParseTypeErrorException(
+                        location,
+                        "assignment cannot be applied between " + left_hand_type->to_string() + " and " +
+                        right_hand_type->to_string()
+                    ));
+                }
+            }
         }
-        else if (op != '=') {
-            throw ParseTypeErrorException(
-                location,
-                "modify and assign cannot be applied between " + left_hand_type->to_string() + " and " +
-                right_hand_type->to_string()
-            );
-        }
-        else if (left_hand_type->equalTo(right_hand_type)) {
-            last_type = left_hand_type;
-            is_left_value = true;
-        }
-        else if (
-            left_hand_type->isConcept() &&
-            right_hand_type->isStruct() &&
-            dynamic_cast<StructType*>(right_hand_type)->implementedConcept(
-                dynamic_cast<ConceptType*>(left_hand_type)
-            )
-        ) {
-            last_type = left_hand_type;
-            is_left_value = true;
-        }
-        else {
-            throw ParseTypeErrorException(
-                location,
-                "assignment cannot be applied between " + left_hand_type->to_string() + " and " +
-                right_hand_type->to_string()
-            );
-        }
+
+        last_type = left_hand_type;
+        is_left_value = true;
     }
 }
 
@@ -373,11 +369,11 @@ Parser::parseConditionalExpr()
     parseLogicOrExpr();
 
     if (_peak() == '?') {
-        if (!last_type->isNumber() || !last_type->isPointer()) {
-            throw ParseTypeErrorException(
+        if (!last_type->is<NumericType>() || !last_type->is<PointerType>()) {
+            error_collector->error(ParseTypeErrorException(
                 location,
-                last_type->to_string() + " is not judgable"
-            );
+                last_type->to_string() + " cannot be used as condition"
+            ));
         }
 
         _next();
@@ -393,7 +389,7 @@ Parser::parseConditionalExpr()
 
         Type *else_part_type = last_type;
 
-        if (then_part_type->isNumber() && else_part_type->isNumber()) {
+        if (then_part_type->is<NumericType>() && else_part_type->is<NumericType>()) {
             IntegeralType *then_int_type = dynamic_cast<IntegeralType*>(then_part_type);
             IntegeralType *else_int_type = dynamic_cast<IntegeralType*>(else_part_type);
             size_t bitwise_size = std::max(
@@ -412,11 +408,12 @@ Parser::parseConditionalExpr()
             last_type = then_part_type;
         }
         else {
-            throw ParseTypeErrorException(
+            error_collector->error(ParseTypeErrorException(
                 location,
                 "conditional expression has different types: " + then_part_type->to_string() + " and " +
                 else_part_type->to_string()
-            );
+            ));
+            last_type = then_part_type;
         }
         is_left_value = false;
     }
@@ -436,12 +433,12 @@ Parser::parseLogicOrExpr()
 
         Type *right_hand_type = last_type;
 
-        if (!left_hand_type->isNumber() || !right_hand_type->isNumber()) {
-            throw ParseTypeErrorException(
+        if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
+            error_collector->error(ParseTypeErrorException(
                 location,
                 std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
                 left_hand_type->to_string() + " and " + right_hand_type->to_string()
-            );
+            ));
         }
 
         IntegeralType *left_hand_int_type = dynamic_cast<IntegeralType*>(left_hand_type);
@@ -474,12 +471,12 @@ Parser::parseLogicAndExpr()
 
         Type *right_hand_type = last_type;
 
-        if (!left_hand_type->isNumber() || !right_hand_type->isNumber()) {
-            throw ParseTypeErrorException(
+        if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
+            error_collector->error(ParseTypeErrorException(
                 location,
                 std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
                 left_hand_type->to_string() + " and " + right_hand_type->to_string()
-            );
+            ));
         }
 
         IntegeralType *left_hand_int_type = dynamic_cast<IntegeralType*>(left_hand_type);
@@ -512,12 +509,12 @@ Parser::parseBitwiseOrExpr()
 
         Type *right_hand_type = last_type;
 
-        if (!left_hand_type->isNumber() || !right_hand_type->isNumber()) {
-            throw ParseTypeErrorException(
+        if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
+            error_collector->error(ParseTypeErrorException(
                 location,
                 std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
                 left_hand_type->to_string() + " and " + right_hand_type->to_string()
-            );
+            ));
         }
 
         IntegeralType *left_hand_int_type = dynamic_cast<IntegeralType*>(left_hand_type);
@@ -550,12 +547,12 @@ Parser::parseBitwiseXorExpr()
 
         Type *right_hand_type = last_type;
 
-        if (!left_hand_type->isNumber() || !right_hand_type->isNumber()) {
-            throw ParseTypeErrorException(
+        if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
+            error_collector->error(ParseTypeErrorException(
                 location,
                 std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
                 left_hand_type->to_string() + " and " + right_hand_type->to_string()
-            );
+            ));
         }
 
         IntegeralType *left_hand_int_type = dynamic_cast<IntegeralType*>(left_hand_type);
@@ -588,12 +585,12 @@ Parser::parseBitwiseAndExpr()
 
         Type *right_hand_type = last_type;
 
-        if (!left_hand_type->isNumber() || !right_hand_type->isNumber()) {
-            throw ParseTypeErrorException(
+        if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
+            error_collector->error(ParseTypeErrorException(
                 location,
                 std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
                 left_hand_type->to_string() + " and " + right_hand_type->to_string()
-            );
+            ));
         }
 
         IntegeralType *left_hand_int_type = dynamic_cast<IntegeralType*>(left_hand_type);
@@ -626,14 +623,14 @@ Parser::parseEqualityExpr()
         Type *right_hand_type = last_type;
 
         if (
-            (!left_hand_type->isNumber() || !right_hand_type->isNumber()) &&
+            (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) &&
             !left_hand_type->equalTo(right_hand_type)
         ) {
-            throw ParseTypeErrorException(
+            error_collector->error(ParseTypeErrorException(
                 location,
                 left_hand_type->to_string() + " and " + right_hand_type->to_string() +
                 " is not comparable"
-            );
+            ));
         }
         last_type = type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS);
         is_left_value = false;
@@ -654,12 +651,12 @@ Parser::parseCompareExpr()
 
         Type *right_hand_type = last_type;
 
-        if (!left_hand_type->isNumber() || !right_hand_type->isNumber()) {
-            throw ParseTypeErrorException(
+        if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
+            error_collector->error(ParseTypeErrorException(
                 location,
                 left_hand_type->to_string() + " and " + right_hand_type->to_string() +
                 " is not comparable"
-            );
+            ));
         }
         last_type = type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS);
         is_left_value = false;
@@ -680,12 +677,12 @@ Parser::parseShiftExpr()
 
         Type *right_hand_type = last_type;
 
-        if (!left_hand_type->isNumber() || !right_hand_type->isNumber()) {
-            throw ParseTypeErrorException(
+        if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
+            error_collector->error(ParseTypeErrorException(
                 location,
                 std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
                 left_hand_type->to_string() + " and " + right_hand_type->to_string()
-            );
+            ));
         }
 
         last_type = left_hand_type;
@@ -707,12 +704,12 @@ Parser::parseAdditiveExpr()
 
         Type *right_hand_type = last_type;
 
-        if (!left_hand_type->isNumber() || !right_hand_type->isNumber()) {
-            throw ParseTypeErrorException(
+        if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
+            error_collector->error(ParseTypeErrorException(
                 location,
                 std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
                 left_hand_type->to_string() + " and " + right_hand_type->to_string()
-            );
+            ));
         }
 
         IntegeralType *left_hand_int_type = dynamic_cast<IntegeralType*>(left_hand_type);
@@ -745,12 +742,12 @@ Parser::parseMultiplitiveExpr()
 
         Type *right_hand_type = last_type;
 
-        if (!left_hand_type->isNumber() || !right_hand_type->isNumber()) {
-            throw ParseTypeErrorException(
+        if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
+            error_collector->error(ParseTypeErrorException(
                 location,
                 std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
                 left_hand_type->to_string() + " and " + right_hand_type->to_string()
-            );
+            ));
         }
 
         IntegeralType *left_hand_int_type = dynamic_cast<IntegeralType*>(left_hand_type);
@@ -775,33 +772,33 @@ Parser::parsePrefixExpr()
     if (_peak() == T_INC) {
         _next();
         parsePostfixExpr();
-        if (!last_type->isIncreasable()) {
-            throw ParseTypeErrorException(
+        if (!last_type->is<NumericType>()) {
+            error_collector->error(ParseTypeErrorException(
                 location,
                 "Self increment cannot be applied on " + last_type->to_string()
-            );
+            ));
         }
         if (!is_left_value) {
-            throw ParseTypeErrorException(
+            error_collector->error(ParseTypeErrorException(
                 location,
                 "Self increment can only be applied on left value"
-            );
+            ));
         }
     }
     else if (_peak() == T_DEC) {
         _next();
         parsePostfixExpr();
-        if (!last_type->isIncreasable()) {
-            throw ParseTypeErrorException(
+        if (!last_type->is<NumericType>()) {
+            error_collector->error(ParseTypeErrorException(
                 location,
                 "Self decrement cannot be applied on " + last_type->to_string()
-            );
+            ));
         }
         if (!is_left_value) {
-            throw ParseTypeErrorException(
+            error_collector->error(ParseTypeErrorException(
                 location,
                 "Self decrement can only be applied on left value"
-            );
+            ));
         }
     }
     else {
@@ -816,32 +813,32 @@ Parser::parsePostfixExpr()
 
     while (true) {
         if (_peak() == T_INC) {
-            if (!last_type->isIncreasable()) {
-                throw ParseTypeErrorException(
+            if (!last_type->is<NumericType>()) {
+                error_collector->error(ParseTypeErrorException(
                     location,
                     "Self increment cannot be applied on " + last_type->to_string()
-                );
+                ));
             }
             if (!is_left_value) {
-                throw ParseTypeErrorException(
+                error_collector->error(ParseTypeErrorException(
                     location,
                     "Self increment can only be applied on left value"
-                );
+                ));
             }
             is_left_value = false;
         }
         else if (_peak() == T_DEC) {
-            if (!last_type->isIncreasable()) {
-                throw ParseTypeErrorException(
+            if (!last_type->is<NumericType>()) {
+                error_collector->error(ParseTypeErrorException(
                     location,
                     "Self decrement cannot be applied on " + last_type->to_string()
-                );
+                ));
             }
             if (!is_left_value) {
-                throw ParseTypeErrorException(
+                error_collector->error(ParseTypeErrorException(
                     location,
                     "Self decrement can only be applied on left value"
-                );
+                ));
             }
             is_left_value = false;
         }
@@ -878,7 +875,15 @@ Parser::parseUnaryExpr()
             _next();
             break;
         }
+        case T_INTEGER:
+        {
+            last_type = type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS);
+            is_left_value = false;
+
+            _next();
+            break;
+        }
         default:
-            assert(false);
+            throw ParseExpectErrorException(location, "unary", _tokenLiteral());
     }
 }

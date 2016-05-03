@@ -12,6 +12,7 @@
 #include "location.hpp"
 #include "symbols.hpp"
 #include "type.hpp"
+#include "error_collector.hpp"
 
 namespace cyan {
 
@@ -27,9 +28,9 @@ public:
         size_t size;
         TChar *content;
 
-        Buffer(size_t size)
+        Buffer(size_t size, const char *content)
             : size(size), content(new TChar[size])
-        { }
+        { memcpy(this->content, content, size); }
 
         Buffer(Buffer &&buffer)
             : size(buffer.size), content(buffer.content)
@@ -51,8 +52,7 @@ public:
         std::string _what;
 
         ParseErrorException(Location location, std::string message)
-            : _what("ERR: " + message + "\n" +
-                    "     " + std::to_string(location) + "\n")
+            : _what(message + "\n     " + std::to_string(location) + "\n")
         { }
 
         const char *
@@ -145,9 +145,9 @@ protected:
     int peaking_token;
     intptr_t peaking_int;
     std::string peaking_string;
-    int error_nr;
     std::unique_ptr<SymbolTable> symbol_table;
     std::unique_ptr<TypePool> type_pool;
+    std::unique_ptr<ErrorCollector> error_collector;
 
     Type *last_type = nullptr;
     bool is_left_value = false;
@@ -212,15 +212,22 @@ protected:
 
 public:
     Parser(const char *content)
-        : location(content),
-          buffer(std::strlen(content)),
+        : location("\"" + std::string(content) + "\""),
+          buffer(std::strlen(content) + 1, content),
           current(buffer.cbegin()),
           peaking_token(T_UNPEAKED),
           peaking_int(0),
           peaking_string(""),
-          error_nr(0),
           symbol_table(new SymbolTable()),
-          type_pool(new TypePool())
+          type_pool(new TypePool()),
+          error_collector(
+              dynamic_cast<ErrorCollector*>(
+                  ChainErrorCollector::Builder()
+                      .addCollector(new ScreenOutputErrorCollector())
+                      .addCollector(new LimitErrorCollector(10))
+                      .release()
+              )
+          )
     { }
 
     virtual ~Parser() = default;

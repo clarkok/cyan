@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <vector>
 #include <string>
+#include <map>
 
 #include "cyan.hpp"
 
@@ -16,8 +17,6 @@ namespace cyan {
 
 class Type
 {
-    bool isIntegeral() const;
-
 public:
     Type() = default;
     virtual ~Type() = default;
@@ -25,17 +24,17 @@ public:
     virtual size_t size() const = 0;
     virtual std::string to_string() const = 0;
 
-    bool isPointer() const;
-    bool isConcept() const;
-    bool isStruct() const;
+    template <typename T>
+    T* to()
+    { return dynamic_cast<T*>(this); }
 
-    inline bool
-    isIncreasable() const
-    { return isIntegeral(); }
+    template <typename T>
+    const T* to() const
+    { return dynamic_cast<const T*>(this); }
 
-    inline bool
-    isNumber() const
-    { return isIntegeral() && !isPointer(); }
+    template <typename T>
+    bool is() const
+    { return to<T>() != nullptr; }
 
     bool equalTo(Type *type) const;
 };
@@ -67,37 +66,51 @@ public:
     virtual bool isSigned() const = 0;
 };
 
-class SignedIntegerType : public IntegeralType
+class NumericType : public IntegeralType
+{
+public:
+    NumericType(size_t bitwise_width)
+        : IntegeralType(bitwise_width)
+    { }
+};
+
+class SignedIntegerType : public NumericType
 {
 public:
     SignedIntegerType(size_t bitwise_width)
-        : IntegeralType(bitwise_width)
+        : NumericType(bitwise_width)
     { }
 
     virtual bool isSigned() const;
     virtual std::string to_string() const;
 };
 
-class UnsignedIntegerType : public IntegeralType
+class UnsignedIntegerType : public NumericType
 {
 public:
     UnsignedIntegerType(size_t bitwise_width)
-        : IntegeralType(bitwise_width)
+        : NumericType(bitwise_width)
     { }
 
     virtual bool isSigned() const;
     virtual std::string to_string() const;
 };
 
-class PointerType : public UnsignedIntegerType
+class PointerType : public IntegeralType
 {
 protected:
     Type *base_type;
 public:
     PointerType(Type *base_type)
-        : UnsignedIntegerType(CYAN_PRODUCT_BITS), base_type(base_type)
+        : IntegeralType(CYAN_PRODUCT_BITS), base_type(base_type)
     { }
+
+    inline Type *
+    getBaseType() const
+    { return base_type; }
+
     virtual std::string to_string() const;
+    virtual bool isSigned() const;
 };
 
 class ArrayType : public PointerType
@@ -164,6 +177,10 @@ public:
     cend() const -> decltype(arguments.cend())
     { return arguments.cend(); }
 
+    inline auto
+    arguments_size() const -> decltype(arguments.size())
+    { return arguments.size(); }
+
     inline Type *
     getReturnType() const
     { return return_type; }
@@ -182,6 +199,10 @@ protected:
 
 public:
     static MethodType *fromFunction(Type *owner, FunctionType *function);
+
+    inline Type *
+    getOwnerType() const
+    { return owner; }
 
     virtual std::string to_string() const;
 };
@@ -233,6 +254,10 @@ public:
     inline auto
     cend() const -> decltype(methods.cend())
     { return methods.cend(); }
+
+    inline auto
+    methods_size() const -> decltype(methods.size())
+    { return methods.size(); }
 
     inline std::string
     getName() const
@@ -304,6 +329,10 @@ public:
     inline auto
     cend() const -> decltype(members.cend())
     { return members.cend(); }
+
+    inline auto
+    members_size() const -> decltype(members.size())
+    { return members.size(); }
 
     inline void
     implementConcept(ConceptType *concept)
@@ -409,14 +438,16 @@ public:
 
 class TypePool
 {
+    std::unique_ptr<VoidType> void_type;
+    std::map<size_t, std::unique_ptr<SignedIntegerType> > signed_integer_type;
+    std::map<size_t, std::unique_ptr<UnsignedIntegerType> > unsigned_integer_type;
 public:
-    TypePool()
-    { }
+    TypePool() = default;
+    ~TypePool() = default;
 
     VoidType *getVoidType();
     SignedIntegerType *getSignedIntegerType(size_t bitwise_width);
     UnsignedIntegerType *getUnsignedIntegerType(size_t bitwise_width);
-    ArrayType *getArrayType(Type *base_type, int lower_bound, int upper_bound);
 };
 
 }
