@@ -143,7 +143,9 @@ public:
     enum Reserved : intptr_t
     {
         R_CONCEPT,
+        R_ELSE,
         R_FUNCTION,
+        R_IF,
         R_LET,
         R_RETURN,
         R_STRUCT,
@@ -223,6 +225,7 @@ protected:
     void parseReturnStmt();
     void parseBlockStmt();
     void parseExpressionStmt();
+    void parseIfStmt();
 
     void parseExpression();
     void parseAssignmentExpr();

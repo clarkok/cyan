@@ -137,5 +137,70 @@ TEST(parser_test, block_test)
     Parser *uut = new Parser(SOURCE);
     ASSERT_TRUE(uut->parse());
 
-    uut->release()->output(std::cout);
+    // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, if_else_test)
+{
+    static const char SOURCE[] =
+        "function main() {\n"
+        "    let a = 1,\n"
+        "        b = 2,\n"
+        "        c = 0;\n"
+        "    if (1) {\n"
+        "        c = a + b;\n"
+        "    }\n"
+        "    else {\n"
+        "        c = a - b;\n"
+        "    }\n"
+        "}\n"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, single_if_test)
+{
+    static const char SOURCE[] =
+        "function main() {\n"
+        "    let a = 1;\n"
+        "    if (a)\n"
+        "        a = 0;\n"
+        "    if (a) {\n"
+        "        a = 1;\n"
+        "    }\n"
+        "}\n"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, nested_if_test)
+{
+    static const char SOURCE[] =
+        "function main() {\n"
+        "    let a = 0;\n"
+        "    if (1)\n"
+        "        if (2)\n"
+        "            a = 1;\n"
+        "        else\n"
+        "            a = 2;\n"
+        "    else\n"
+        "        if (3)\n"
+        "            a = 3;\n"
+        "        else\n"
+        "            a = 4;\n"
+        "}\n"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
 }

@@ -267,7 +267,9 @@ Parser::_registerReserved()
         name, Location("<reserved>"), name, Symbol::K_RESERVED, token_value, false, nullptr)
 
     reserved("concept", R_CONCEPT);
+    reserved("else", R_ELSE);
     reserved("function", R_FUNCTION);
+    reserved("if", R_IF);
     reserved("let", R_LET);
     reserved("return", R_RETURN);
     reserved("struct", R_STRUCT);
@@ -605,6 +607,9 @@ Parser::parseStatement()
                 case R_RETURN:
                     parseReturnStmt();
                     return;
+                case R_IF:
+                    parseIfStmt();
+                    return;
                 default:
                     throw ParseExpectErrorException(location, "statement", _tokenLiteral());
             }
@@ -612,6 +617,7 @@ Parser::parseStatement()
     }
     else if (_peak() == '{') {
         parseBlockStmt();
+        return;
     }
     parseExpressionStmt();
 }
@@ -771,6 +777,71 @@ Parser::parseExpressionStmt()
         );
     }
     _next();
+}
+
+void
+Parser::parseIfStmt()
+{
+    assert(_peak() == T_ID);
+
+    auto *symbol = symbol_table->lookup(peaking_string);
+    assert(symbol);
+    assert(symbol->token_value == R_IF);
+    _next();
+
+    if (_peak() != '(') {
+        throw ParseExpectErrorException(
+            location,
+            "if condition",
+            _tokenLiteral()
+        );
+    }
+    _next();
+
+    parseExpression();
+
+    if (!last_type->is<NumericType>()) {
+        throw ParseTypeErrorException(
+            location,
+            "type " + last_type->to_string() + " cannot be used as condition"
+        );
+    }
+    if (is_left_value) {
+        result_inst = current_block->LoadInst(last_type, result_inst);
+    }
+
+    auto head_block = std::move(current_block);
+    auto condition_value = result_inst;
+
+    if (_peak() != ')') {
+        throw ParseExpectErrorException(location, "')'", _tokenLiteral());
+    }
+    _next();
+
+    auto then_block = current_function->newBasicBlock();
+    auto else_block = current_function->newBasicBlock();
+
+    head_block->BrInst(condition_value, then_block->get(), else_block->get());
+
+    // then part
+    current_block = std::move(then_block);
+    parseStatement();
+    then_block = std::move(current_block);
+
+    if (_peak() == T_ID) {
+        symbol = symbol_table->lookup(peaking_string);
+        if (symbol && symbol->token_value == R_ELSE) {
+            _next();
+
+            current_block = std::move(else_block);
+            parseStatement();
+            else_block = std::move(current_block);
+        }
+    }
+
+    current_block = current_function->newBasicBlock();
+    then_block->JumpInst(current_block->get());
+    else_block->JumpInst(current_block->get());
 }
 
 void
