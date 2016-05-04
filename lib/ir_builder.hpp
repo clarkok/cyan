@@ -54,6 +54,33 @@ public:
             friend class BlockBuilder;
         };
 
+        class CallBuilder
+        {
+            BlockBuilder *owner;
+            CallInst::Builder builder;
+
+            CallBuilder(BlockBuilder *owner, Type *type, Instrument *function, std::string name)
+                : owner(owner), builder(type, function, name)
+            { }
+        public:
+            CallBuilder(CallBuilder &&builder)
+                : owner(builder.owner), builder(std::move(builder.builder))
+            { }
+
+            ~CallBuilder() = default;
+
+            Instrument *commit();
+
+            inline CallBuilder &
+            addArgument(Instrument *value)
+            {
+                builder.addArgument(value);
+                return *this;
+            }
+
+            friend class BlockBuilder;
+        };
+
         BlockBuilder(BlockBuilder &&builder)
             : owner(builder.owner), product(builder.product)
         { }
@@ -62,11 +89,11 @@ public:
 
         inline std::string
         tempName(std::string name)
-        { return name.length() ? name : "_" + std::to_string(function->product->countLocalTemp()); }
-
-        inline BasicBlock *
-        release()
-        { return product; }
+        {
+            return name.length()
+                   ? function->product->makeName(name)
+                   : "_" + std::to_string(function->product->countLocalTemp());
+        }
 
         inline BasicBlock *
         get() const
@@ -106,11 +133,14 @@ public:
         virtual Instrument *StoreInst(Type *type, Instrument *address, Instrument *value, std::string name = "");
         virtual Instrument *AllocaInst(Type *type, Instrument *space, std::string name = "");
 
+        virtual Instrument *RetInst(Type *type, Instrument *return_value);
+
         virtual void JumpInst(BasicBlock *block);
         virtual void BrInst(Instrument *condition, BasicBlock *then_block, BasicBlock *else_block);
 
         friend class FunctionBuilder;
     protected:
+        virtual Instrument *CallInst(class CallInst *inst);
         virtual Instrument *PhiInst(class PhiInst *inst);
     };
 
@@ -130,10 +160,6 @@ public:
         virtual ~FunctionBuilder() = default;
 
         inline Function *
-        release()
-        { return product; }
-
-        inline Function *
         get() const
         { return product; }
 
@@ -150,7 +176,7 @@ public:
         : product(new IR())
     { }
 
-    virtual std::unique_ptr<FunctionBuilder> newFunction(std::string name);
+    virtual std::unique_ptr<FunctionBuilder> newFunction(std::string name, FunctionType *prototype);
     virtual std::unique_ptr<FunctionBuilder> findFunction(std::string name);
 
     inline IR *

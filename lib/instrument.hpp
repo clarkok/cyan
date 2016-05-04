@@ -12,6 +12,7 @@
 namespace cyan {
 
 class BasicBlock;
+class Function;
 
 class Instrument
 {
@@ -166,9 +167,87 @@ public:
     virtual std::string to_string() const;
 };
 
-class PhiInst : public Instrument
+class CallInst : public Instrument
 {
 protected:
+    Instrument *function;
+    std::vector<Instrument *> arguments;
+
+    CallInst(Type *type, Instrument *function, std::string name)
+        : Instrument(type, name), function(function)
+    { }
+
+public:
+    struct Builder
+    {
+        std::unique_ptr<CallInst> product;
+
+        Builder(Type *type, Instrument *function, std::string name = "")
+            : product(new CallInst(type, function, name))
+        { }
+
+        Builder(Builder &&builder)
+            : product(std::move(builder.product))
+        { }
+
+        inline CallInst *
+        release()
+        { return product.release(); }
+
+        inline Builder &
+        addArgument(Instrument *argument)
+        {
+            product->arguments.push_back(argument);
+            return *this;
+        }
+    };
+
+    inline Instrument *
+    getFunction() const
+    { return function; }
+
+    inline auto
+    begin() -> decltype(arguments.begin())
+    { return arguments.begin(); }
+
+    inline auto
+    end() -> decltype(arguments.end())
+    { return arguments.end(); }
+
+    inline auto
+    cbegin() const -> decltype(arguments.cbegin())
+    { return arguments.cbegin(); }
+
+    inline auto
+    cend() const -> decltype(arguments.cend())
+    { return arguments.cend(); }
+
+    inline auto
+    arguments_size() const -> decltype(arguments.size())
+    { return arguments.size(); }
+
+    virtual std::string to_string() const;
+};
+
+class RetInst : public Instrument
+{
+protected:
+    Instrument *return_value;
+public:
+    RetInst(Type *type, Instrument *return_value)
+        : Instrument(type, ""), return_value(return_value)
+    { }
+
+    inline Instrument *
+    getReturnValue() const
+    { return return_value; }
+
+    virtual std::string to_string() const;
+};
+
+class PhiInst : public Instrument
+{
+public:
     struct Branch
     {
         Instrument *value;
@@ -179,6 +258,7 @@ protected:
         { }
     };
 
+protected:
     std::vector<Branch> branches;
 
     PhiInst(Type *type, std::string name)

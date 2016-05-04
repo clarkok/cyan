@@ -269,6 +269,7 @@ Parser::_registerReserved()
     reserved("concept", R_CONCEPT);
     reserved("function", R_FUNCTION);
     reserved("let", R_LET);
+    reserved("return", R_RETURN);
     reserved("struct", R_STRUCT);
 
 #undef reserved
@@ -463,7 +464,7 @@ Parser::parseFunctionDefine()
         throw ParseExpectErrorException(location, "function body", _tokenLiteral());
     }
 
-    current_function = ir_builder->newFunction(function_name);
+    current_function = ir_builder->newFunction(function_name, last_type->to<FunctionType>());
     current_block = current_function->newBasicBlock("entry");
     if (forward_symbol) {
         forward_symbol->token_value = reinterpret_cast<intptr_t>(current_function->get());
@@ -577,7 +578,9 @@ Parser::parseFunctionBody()
             while (_peak() != T_EOF && _peak() != '}' && _peak() != ';') {
                 _next();
             }
-            _next();
+            if (_peak() == ';') {
+                _next();
+            }
         }
     }
 
@@ -599,12 +602,18 @@ Parser::parseStatement()
                 case R_LET:
                     parseLetStmt();
                     return;
+                case R_RETURN:
+                    parseReturnStmt();
+                    return;
                 default:
                     throw ParseExpectErrorException(location, "statement", _tokenLiteral());
             }
         }
     }
-    parseExpression();
+    else if (_peak() == '{') {
+        parseBlockStmt();
+    }
+    parseExpressionStmt();
 }
 
 void
@@ -653,6 +662,113 @@ Parser::parseLetStmt()
 
     if (_peak() != ';') {
         throw ParseExpectErrorException(location, "';'", _tokenLiteral());
+    }
+    _next();
+}
+
+void
+Parser::parseReturnStmt()
+{
+    assert(_peak() == T_ID);
+
+    auto *symbol = symbol_table->lookup(peaking_string);
+    assert(symbol);
+    assert(symbol->token_value == R_RETURN);
+    _next();
+
+    Type *ret_type = current_function->get()->getPrototype()->getReturnType();
+    if (ret_type->equalTo(type_pool->getVoidType())) {
+        if (_peak() != ';') {
+            throw ParseTypeErrorException(
+                location,
+                "current function `" + current_function->get()->getName() + "` has return value of Void type"
+            );
+        }
+        _next();
+        current_block->RetInst(type_pool->getVoidType(), nullptr);
+    }
+    else {
+        if (_peak() == ';') {
+            throw ParseTypeErrorException(
+                location,
+                "current function `" + current_function->get()->getName() + "` should return a value of type " +
+                ret_type->to_string()
+            );
+        }
+
+        parseExpression();
+        if (!ret_type->is<NumericType>() || !last_type->is<NumericType>()) {
+            if (!ret_type->equalTo(last_type)) {
+                if (
+                    !ret_type->is<ConceptType>() ||
+                    !last_type->is<StructType>() ||
+                    dynamic_cast<StructType*>(last_type)->implementedConcept(
+                        dynamic_cast<ConceptType*>(ret_type)
+                    )
+                    ) {
+                    error_collector->error(ParseTypeErrorException(
+                        location,
+                        "cannot return value of type " + last_type->to_string() +
+                        ", type " + ret_type->to_string() + " required"
+                    ));
+                }
+            }
+        }
+
+        if (is_left_value) {
+            result_inst = current_block->LoadInst(last_type, result_inst);
+        }
+        current_block->RetInst(type_pool->getVoidType(), result_inst);
+
+        if (_peak() != ';') {
+            throw ParseExpectErrorException(location, "';'", _tokenLiteral());
+        }
+        _next();
+    }
+}
+
+void
+Parser::parseBlockStmt()
+{
+    assert(_peak() == '{');
+    _next();
+
+    symbol_table->pushScope();
+    while (_peak() != T_EOF && _peak() != '}') {
+        try {
+            parseStatement();
+        }
+        catch (const ParseErrorException &e) {
+            error_collector->error(e);
+            while (_peak() != T_EOF && _peak() != ';' && _peak() != '}')  {
+                _next();
+            }
+            if (_peak() == ';') {
+                _next();
+            }
+        }
+    }
+    symbol_table->popScope();
+
+    if (_peak() == T_EOF) {
+        throw ParseErrorException(
+            location,
+            "unexpected EOF"
+        );
+    }
+    _next();
+}
+
+void
+Parser::parseExpressionStmt()
+{
+    parseExpression();
+    if (_peak() != ';') {
+        throw ParseExpectErrorException(
+            location,
+            "';'",
+            _tokenLiteral()
+        );
     }
     _next();
 }
@@ -1401,6 +1517,66 @@ Parser::parsePrefixExpr()
             )
         );
         current_block->StoreInst(last_type, original_address, descreased_value);
+    }
+    else if (_peak() == '-') {
+        _next();
+        parsePostfixExpr();
+        if (!last_type->is<NumericType>()) {
+            error_collector->error(ParseTypeErrorException(
+                location,
+                "`-` cannot be applied on " + last_type->to_string()
+            ));
+        }
+
+        if (is_left_value) {
+            result_inst = current_block->LoadInst(last_type, result_inst);
+        }
+        result_inst = current_block->SubInst(
+            last_type,
+            current_block->SignedImmInst(type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS), 0),
+            result_inst
+        );
+        is_left_value = false;
+    }
+    else if (_peak() == '~') {
+        _next();
+        parsePostfixExpr();
+        if (!last_type->is<NumericType>()) {
+            error_collector->error(ParseTypeErrorException(
+                location,
+                "`-` cannot be applied on " + last_type->to_string()
+            ));
+        }
+
+        if (is_left_value) {
+            result_inst = current_block->LoadInst(last_type, result_inst);
+        }
+        result_inst = current_block->NorInst(
+            last_type,
+            current_block->UnsignedImmInst(type_pool->getUnsignedIntegerType(CYAN_PRODUCT_BITS), 0),
+            result_inst
+        );
+        is_left_value = false;
+    }
+    else if (_peak() == '!') {
+        _next();
+        parsePostfixExpr();
+        if (!last_type->is<NumericType>()) {
+            error_collector->error(ParseTypeErrorException(
+                location,
+                "`-` cannot be applied on " + last_type->to_string()
+            ));
+        }
+
+        if (is_left_value) {
+            result_inst = current_block->LoadInst(last_type, result_inst);
+        }
+        result_inst = current_block->SeqInst(
+            last_type,
+            current_block->SignedImmInst(type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS), 0),
+            result_inst
+        );
+        is_left_value = false;
     }
     else {
         parsePostfixExpr();

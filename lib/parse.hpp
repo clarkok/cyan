@@ -145,6 +145,7 @@ public:
         R_CONCEPT,
         R_FUNCTION,
         R_LET,
+        R_RETURN,
         R_STRUCT,
     };
 
@@ -213,12 +214,15 @@ protected:
 
     void parseGlobalLetStmt();
     void parseFunctionDefine();
-    void parseLetStmt();
 
     void parsePrototype();
     void parseFunctionBody();
 
     void parseStatement();
+    void parseLetStmt();
+    void parseReturnStmt();
+    void parseBlockStmt();
+    void parseExpressionStmt();
 
     void parseExpression();
     void parseAssignmentExpr();
@@ -257,7 +261,7 @@ public:
               )
           ),
           ir_builder(new IRBuilder())
-    { ir_builder->newFunction("_init_"); }
+    { ir_builder->newFunction("_init_", nullptr); }
 
     virtual ~Parser() = default;
 

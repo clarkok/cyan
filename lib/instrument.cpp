@@ -70,6 +70,25 @@ AllocaInst::to_string() const
 { return value_header("alloc") + space->getName(); }
 
 std::string
+CallInst::to_string() const
+{
+    std::string ret(value_header("call") + function->getName() + "(");
+
+    for (auto iter = cbegin(); iter != cend(); ++iter) {
+        ret += (*iter)->getName() + ", ";
+    }
+
+    ret.pop_back();
+    ret.pop_back();
+    ret += ")";
+    return ret;
+}
+
+std::string
+RetInst::to_string() const
+{ return inst_header("ret") + (return_value ? return_value->getName() : ""); }
+
+std::string
 PhiInst::to_string() const
 {
     std::string ret(value_header("phi"));

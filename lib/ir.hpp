@@ -7,6 +7,7 @@
 
 #include <map>
 #include <list>
+#include <set>
 #include <iostream>
 
 #include "instrument.hpp"
@@ -82,12 +83,13 @@ public:
 class Function
 {
     std::list<std::unique_ptr<BasicBlock> > block_list;
-    BasicBlock *entry;
     std::string name;
+    FunctionType *prototype;
     int local_temp_counter;
+    std::set<std::string> local_names;
 
-    Function(std::string name)
-        : name(name), local_temp_counter(0)
+    Function(std::string name, FunctionType *prototype)
+        : name(name), prototype(prototype), local_temp_counter(0)
     { }
 
 public:
@@ -113,17 +115,27 @@ public:
     size() const -> decltype(block_list.size())
     { return block_list.size(); }
 
-    inline BasicBlock *
-    getEntry() const
-    { return entry; }
-
     inline std::string
     getName() const
     { return name; }
 
+    inline FunctionType *
+    getPrototype() const
+    { return prototype; }
+
     inline int
     countLocalTemp()
     { return local_temp_counter++; }
+
+    inline std::string
+    makeName(std::string variable_name)
+    {
+        if (local_names.find(variable_name) != local_names.end()) {
+            variable_name += "_" + std::to_string(countLocalTemp());
+        }
+        local_names.insert(variable_name);
+        return variable_name;
+    }
 
     std::ostream &output(std::ostream &os) const;
 

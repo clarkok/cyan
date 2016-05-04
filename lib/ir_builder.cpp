@@ -198,6 +198,15 @@ IRBuilder::BlockBuilder::AllocaInst(Type *type, Instrument *space, std::string n
     return ret;
 }
 
+Instrument *
+IRBuilder::BlockBuilder::RetInst(Type *type, Instrument *return_value)
+{
+    assert(!productEnded());
+    Instrument *ret;
+    product->inst_list.emplace_back(ret = new class RetInst(type, return_value));
+    return ret;
+}
+
 void
 IRBuilder::BlockBuilder::JumpInst(BasicBlock *block)
 {
@@ -212,6 +221,14 @@ IRBuilder::BlockBuilder::BrInst(Instrument *condition, BasicBlock *then_block, B
     product->condition = condition;
     product->then_block = then_block;
     product->else_block = else_block;
+}
+
+Instrument *
+IRBuilder::BlockBuilder::CallInst(class CallInst *inst)
+{
+    assert(!productEnded());
+    product->inst_list.emplace_back(inst);
+    return inst;
 }
 
 Instrument *
@@ -236,10 +253,10 @@ IRBuilder::FunctionBuilder::newBasicBlock(std::string name)
 }
 
 std::unique_ptr<IRBuilder::FunctionBuilder>
-IRBuilder::newFunction(std::string name)
+IRBuilder::newFunction(std::string name, FunctionType *prototype)
 {
     Function *func;
-    product->function_table.emplace(name, std::unique_ptr<Function>(func = new Function(name)));
+    product->function_table.emplace(name, std::unique_ptr<Function>(func = new Function(name, prototype)));
     return std::unique_ptr<FunctionBuilder>(new FunctionBuilder(this, func));
 }
 

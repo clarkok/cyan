@@ -15,6 +15,8 @@ TEST(parser_test, let_stmt)
 
     Parser *uut = new Parser(SOURCE);
     ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
 }
 
 TEST(parser_test, let_define_stmt)
@@ -24,6 +26,8 @@ TEST(parser_test, let_define_stmt)
 
     Parser *uut = new Parser(SOURCE);
     ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
 }
 
 TEST(parser_test, logic_and_test)
@@ -33,6 +37,8 @@ TEST(parser_test, logic_and_test)
 
     Parser *uut = new Parser(SOURCE);
     ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
 }
 
 TEST(parser_test, multiple_let_test)
@@ -45,6 +51,8 @@ TEST(parser_test, multiple_let_test)
 
     Parser *uut = new Parser(SOURCE);
     ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
 }
 
 TEST(parser_test, function_test)
@@ -58,6 +66,8 @@ TEST(parser_test, function_test)
 
     Parser *uut = new Parser(SOURCE);
     ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
 }
 
 TEST(parser_test, multiple_functions_test)
@@ -74,6 +84,8 @@ TEST(parser_test, multiple_functions_test)
 
     Parser *uut = new Parser(SOURCE);
     ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
 }
 
 TEST(parser_test, function_forward_decl_test)
@@ -82,6 +94,43 @@ TEST(parser_test, function_forward_decl_test)
         "function test1(a : i32, b : i32);\n"
         "function test2() { }\n"
         "function test1(a : i32, b : i32) {\n"
+        "}\n"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, return_test)
+{
+    static const char SOURCE[] =
+        "function test_i32(a : i32, b : i32) : i32 {\n"
+        "    return a;\n"
+        "}\n"
+        "function test(a : i32, b : i32) {\n"
+        "    return;\n"
+        "}\n"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, block_test)
+{
+    static const char SOURCE[] =
+        "function main() {\n"
+        "   let a = 0;\n"
+        "   let b = a;\n"
+        "   {\n"
+        "        let a = 1;\n"
+        "        b = a;\n"
+        "   }\n"
+        "   b = a;\n"
         "}\n"
     ;
 
