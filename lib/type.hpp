@@ -134,8 +134,8 @@ protected:
     std::vector<Type *> arguments;
     Type *return_type;
 
-    FunctionType(Type *return_type)
-        : PointerType(this), return_type(return_type)
+    FunctionType()
+        : PointerType(this), return_type(nullptr)
     { }
 
 public:
@@ -145,16 +145,23 @@ public:
         std::unique_ptr<FunctionType> product;
 
     public:
-        Builder(Type *return_type)
-            : product(new FunctionType(return_type))
+        Builder()
+            : product(new FunctionType())
+        { }
+
+        Builder(Builder &&builder)
+            : product(std::move(builder.product))
         { }
 
         inline FunctionType *
-        release()
-        { return product.release(); }
+        release(Type *return_type)
+        {
+            product->return_type = return_type;
+            return product.release();
+        }
 
         inline Builder &
-        appendArgument(Type *arg_type)
+        addArgument(Type *arg_type)
         {
             product->arguments.push_back(arg_type);
             return *this;
@@ -193,8 +200,8 @@ class MethodType : public FunctionType
 protected:
     Type *owner;
 
-    MethodType(Type *return_type, Type *owner)
-        : FunctionType(return_type), owner(owner)
+    MethodType(Type *owner)
+        : owner(owner)
     { }
 
 public:
@@ -355,11 +362,16 @@ public:
 
 class TemplateArgumentType : public PointerType
 {
+    class TemplateType *scope;
     std::string name;
 public:
-    TemplateArgumentType(Type *concept, std::string name)
-        : PointerType(concept), name(name)
-    { assert(dynamic_cast<ConceptType*>(concept)); }
+    TemplateArgumentType(ConceptType *concept, class TemplateType *scope, std::string name)
+        : PointerType(concept), scope(scope), name(name)
+    { }
+
+    inline class TemplateType *
+    getScope() const
+    { return scope; }
 
     inline std::string
     getName() const
@@ -374,7 +386,7 @@ public:
     struct Argument
     {
         std::string name;
-        TemplateArgumentType *type;
+        std::unique_ptr<TemplateArgumentType> type;
 
         Argument(std::string name, TemplateArgumentType *type)
             : name(name), type(type)
@@ -405,9 +417,12 @@ public:
         { return product.release(); }
 
         inline Builder &
-        addArgument(std::string name, TemplateArgumentType *argument)
+        addArgument(std::string name, ConceptType *concept)
         {
-            product->arguments.emplace_back(name, argument);
+            product->arguments.emplace_back(
+                name,
+                new TemplateArgumentType(concept, product.get(), name)
+            );
             return *this;
         }
     };
@@ -441,13 +456,51 @@ class TypePool
     std::unique_ptr<VoidType> void_type;
     std::map<size_t, std::unique_ptr<SignedIntegerType> > signed_integer_type;
     std::map<size_t, std::unique_ptr<UnsignedIntegerType> > unsigned_integer_type;
+    std::map<Type *, std::unique_ptr<PointerType> > pointer_type;
+    std::vector<std::unique_ptr<FunctionType> > function_type;
 public:
+    class FunctionTypeBuilder
+    {
+        TypePool *owner;
+        FunctionType::Builder builder;
+
+        FunctionTypeBuilder(TypePool *owner)
+            : owner(owner), builder()
+        { }
+
+    public:
+        FunctionTypeBuilder(FunctionTypeBuilder &&b)
+            : owner(b.owner), builder(std::move(b.builder))
+        { }
+
+        inline FunctionType *
+        commit(Type *return_type)
+        {
+            owner->function_type.emplace_back(builder.release(return_type));
+            return owner->function_type.back().get();
+        }
+
+        inline FunctionTypeBuilder &
+        addArgument(Type *type)
+        {
+            builder.addArgument(type);
+            return *this;
+        }
+
+        friend class TypePool;
+    };
+
     TypePool() = default;
     ~TypePool() = default;
 
     VoidType *getVoidType();
     SignedIntegerType *getSignedIntegerType(size_t bitwise_width);
     UnsignedIntegerType *getUnsignedIntegerType(size_t bitwise_width);
+    PointerType *getPointerType(Type *base_type);
+
+    inline FunctionTypeBuilder
+    getFunctionTypeBuilder()
+    { return FunctionTypeBuilder(this); };
 };
 
 }

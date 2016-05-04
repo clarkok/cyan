@@ -13,6 +13,7 @@
 #include "symbols.hpp"
 #include "type.hpp"
 #include "error_collector.hpp"
+#include "ir_builder.hpp"
 
 namespace cyan {
 
@@ -77,6 +78,16 @@ public:
         { }
     };
 
+    struct ParseInvalidVariableNameException : ParseErrorException
+    {
+        ParseInvalidVariableNameException(Location location, std::string name)
+            : ParseErrorException(
+                location,
+                "`" + name + "` is not a valid variable name"
+            )
+        { }
+    };
+
     struct ParseUndefinedErrorException : ParseErrorException
     {
         ParseUndefinedErrorException(Location location, std::string name)
@@ -132,7 +143,7 @@ public:
     enum Reserved : intptr_t
     {
         R_CONCEPT,
-        R_DEFINE,
+        R_FUNCTION,
         R_LET,
         R_STRUCT,
     };
@@ -147,10 +158,15 @@ protected:
     std::string peaking_string;
     std::unique_ptr<SymbolTable> symbol_table;
     std::unique_ptr<TypePool> type_pool;
+    CounterErrorCollector *error_counter;
     std::unique_ptr<ErrorCollector> error_collector;
+    std::unique_ptr<IRBuilder> ir_builder;
+    std::unique_ptr<IRBuilder::FunctionBuilder> current_function;
+    std::unique_ptr<IRBuilder::BlockBuilder> current_block;
 
     Type *last_type = nullptr;
     bool is_left_value = false;
+    Instrument *result_inst;
 
 private:
     inline TChar
@@ -191,7 +207,18 @@ private:
     void _registerReserved();
 
 protected:
+    void checkVariableDefined(std::string name);
+    Symbol *checkFunctionDefined(std::string name, FunctionType *type);
+    Type *checkTypeName(std::string name);
+
+    void parseGlobalLetStmt();
+    void parseFunctionDefine();
     void parseLetStmt();
+
+    void parsePrototype();
+    void parseFunctionBody();
+
+    void parseStatement();
 
     void parseExpression();
     void parseAssignmentExpr();
@@ -220,19 +247,25 @@ public:
           peaking_string(""),
           symbol_table(new SymbolTable()),
           type_pool(new TypePool()),
+          error_counter(new LimitErrorCollector(10)),
           error_collector(
               dynamic_cast<ErrorCollector*>(
                   ChainErrorCollector::Builder()
                       .addCollector(new ScreenOutputErrorCollector())
-                      .addCollector(new LimitErrorCollector(10))
+                      .addCollector(error_counter)
                       .release()
               )
-          )
-    { }
+          ),
+          ir_builder(new IRBuilder())
+    { ir_builder->newFunction("_init_"); }
 
     virtual ~Parser() = default;
 
     bool parse();
+
+    inline IR *
+    release()
+    { return ir_builder->release(); }
 };
 
 }

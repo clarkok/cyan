@@ -22,10 +22,13 @@ public:
     {
         K_RESERVED,
         K_VARIABLE,
+        K_ARGUMENT,
+        K_GLOBAL,
         K_STRUCT,
         K_CONCEPT,
         K_FUNCTION,
         K_TEMPLATE_ARG,
+        K_PRIMITIVE,
     };
 
     Location location;
@@ -67,21 +70,17 @@ class SymbolScope
     { }
 
     template <typename ...T_Args> Symbol *
-    definedSymbol(std::string name, T_Args ...args)
+    defineSymbol(std::string name, T_Args ...args)
     {
         Symbol *ret;
         table.emplace(name, std::unique_ptr<Symbol>(ret = (new Symbol(args...))));
         return ret;
     }
 
-    inline bool
-    isRootScope() const
-    { return parent == nullptr; }
-
     inline SymbolScope *
     createChildScope()
     {
-        children.emplace_back(this);
+        children.emplace_back(std::unique_ptr<SymbolScope>(new SymbolScope(this)));
         return children.back().get();
     }
 
@@ -103,6 +102,31 @@ class SymbolScope
 
 public:
     ~SymbolScope() = default;
+
+    inline auto
+    begin() -> decltype(table.begin())
+    { return table.begin(); }
+
+    inline auto
+    end() -> decltype(table.end())
+    { return table.end(); }
+
+    inline auto
+    cbegin() const -> decltype(table.cbegin())
+    { return table.cbegin(); }
+
+    inline auto
+    cend() const -> decltype(table.cend())
+    { return table.cend(); }
+
+    inline auto
+    size() const -> decltype(table.size())
+    { return table.size(); }
+
+    inline bool
+    isRootScope() const
+    { return parent == nullptr; }
+
     friend class SymbolTable;
 };
 
@@ -134,10 +158,6 @@ public:
     currentScope() const
     { return current_scope; }
 
-    template <typename ...T_Args> Symbol *
-    definedSymbol(std::string name, T_Args ...args)
-    { return current_scope->definedSymbol(name, args...); }
-
     inline Symbol *
     lookup(std::string name) const
     { return current_scope->lookup(name); }
@@ -145,6 +165,14 @@ public:
     inline SymbolScope *
     lookupDefineScope(std::string name) const
     { return current_scope->lookupDefineScope(name); }
+
+    template <typename ...T_Args> Symbol *
+    defineSymbol(std::string name, T_Args ...args)
+    { return current_scope->defineSymbol(name, args...); }
+
+    template <typename ...T_Args> Symbol *
+    defineSymbolInRoot(std::string name, T_Args ...args)
+    { return root_scope->defineSymbol(name, args...); }
 };
 
 }

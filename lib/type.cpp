@@ -26,10 +26,6 @@ Type::equalTo(Type *type) const
         return type->is<ArrayType>() &&
                to<ArrayType>()->getBaseType()->equalTo(type->to<ArrayType>()->getBaseType());
     }
-    else if (is<PointerType>()) {
-        return type->is<PointerType>() &&
-               to<PointerType>()->getBaseType()->equalTo(type->to<PointerType>()->getBaseType());
-    }
     else if (is<MethodType>()) {
         if (!type->is<MethodType>()) {
             return false;
@@ -85,6 +81,10 @@ Type::equalTo(Type *type) const
         }
         return true;
     }
+    else if (is<PointerType>()) {
+        return type->is<PointerType>() &&
+               to<PointerType>()->getBaseType()->equalTo(type->to<PointerType>()->getBaseType());
+    }
     else if (is<ConceptType>()) {
         return type->is<ConceptType>() &&
                to<ConceptType>()->getName() ==
@@ -134,7 +134,7 @@ PointerType::isSigned() const
 
 std::string
 PointerType::to_string() const
-{ return "*" + base_type->to_string(); }
+{ return base_type->to_string() + "*"; }
 
 size_t
 ArrayType::size() const
@@ -162,8 +162,9 @@ FunctionType::to_string() const
 MethodType *
 MethodType::fromFunction(Type *owner, FunctionType *function)
 {
-    auto ret = new MethodType(function->getReturnType(), owner);
+    auto ret = new MethodType(owner);
     std::copy(function->cbegin(), function->cend(), ret->arguments.begin());
+    ret->return_type = function->getReturnType();
     return ret;
 }
 
@@ -238,4 +239,16 @@ TypePool::getUnsignedIntegerType(size_t bitwise_width)
         );
     }
     return unsigned_integer_type[bitwise_width].get();
+}
+
+PointerType *
+TypePool::getPointerType(Type *base_type)
+{
+    if (pointer_type.find(base_type) == pointer_type.end()) {
+        pointer_type.emplace(
+            base_type,
+            std::unique_ptr<PointerType>(new PointerType(base_type))
+        );
+    }
+    return pointer_type[base_type].get();
 }

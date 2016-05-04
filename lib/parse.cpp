@@ -55,6 +55,24 @@ Parser::_next()
             _forward();
             break;
         }
+        else if (_current() == '&') {
+            if (!_endOfInput(1)) {
+                _forward();
+                if (_current() == '&')  {
+                    peaking_token = T_LOGIC_AND;
+                    _forward();
+                }
+                else if (_current() == '=') {
+                    peaking_token = T_AND_ASSIGN;
+                    _forward();
+                }
+            }
+            else {
+                _forward();
+                peaking_token = '&';
+            }
+            break;
+        }
         else {
             peaking_token = *current++;
             break;
@@ -178,7 +196,6 @@ Parser::_parseLineComment()
 bool
 Parser::parse()
 {
-    bool result = true;
     _registerReserved();
 
     while (_peak() != T_EOF) {
@@ -200,22 +217,22 @@ Parser::parse()
 
             if (symbol->token_value == R_CONCEPT) {
             }
-            else if (symbol->token_value == R_DEFINE) {
+            else if (symbol->token_value == R_FUNCTION) {
+                parseFunctionDefine();
             }
             else if (symbol->token_value == R_LET) {
-                parseLetStmt();
+                parseGlobalLetStmt();
             }
             else if (symbol->token_value == R_STRUCT) {
             }
             else {
                 throw ParseErrorException(
                     location,
-                    "Only concept / define / let / struct allowed to appear here"
+                    "Only concept / function / let / struct allowed to appear here"
                 );
             }
         }
         catch (const ParseErrorException &e) {
-            result = false;
             error_collector->error(e);
             while (_peak() != T_EOF) {
                 if (_peak() == T_ID) {
@@ -223,7 +240,7 @@ Parser::parse()
                     if (symbol && symbol->klass == Symbol::K_RESERVED &&
                         (
                             symbol->token_value == R_CONCEPT ||
-                            symbol->token_value == R_DEFINE ||
+                            symbol->token_value == R_FUNCTION ||
                             symbol->token_value == R_LET ||
                             symbol->token_value == R_STRUCT
                         )
@@ -239,22 +256,355 @@ Parser::parse()
         }
     }
 
-    return result;
+    return !error_counter->getErrorCount();
 }
 
 void
 Parser::_registerReserved()
 {
 #define reserved(name, token_value)     \
-    symbol_table->definedSymbol(        \
+    symbol_table->defineSymbol(         \
         name, Location("<reserved>"), name, Symbol::K_RESERVED, token_value, false, nullptr)
 
     reserved("concept", R_CONCEPT);
-    reserved("define", R_DEFINE);
+    reserved("function", R_FUNCTION);
     reserved("let", R_LET);
     reserved("struct", R_STRUCT);
 
 #undef reserved
+
+#define primitive(name, type)           \
+    symbol_table->defineSymbol(         \
+        name, Location("<primitive>"), name, Symbol::K_PRIMITIVE, 0, false, type)
+
+    primitive("i8", type_pool->getSignedIntegerType(8));
+    primitive("i16", type_pool->getSignedIntegerType(16));
+    primitive("i32", type_pool->getSignedIntegerType(32));
+    primitive("u8", type_pool->getSignedIntegerType(8));
+    primitive("u16", type_pool->getSignedIntegerType(16));
+    primitive("u32", type_pool->getSignedIntegerType(32));
+
+#undef primitive
+}
+
+void
+Parser::checkVariableDefined(std::string name)
+{
+    auto symbol = symbol_table->lookup(name);
+    if (!symbol) { return; }
+    if (
+        symbol->klass == Symbol::K_PRIMITIVE ||
+        symbol->klass == Symbol::K_CONCEPT ||
+        symbol->klass == Symbol::K_STRUCT
+    ) {
+        throw ParseRedefinedErrorException(location, name, symbol->location);
+    }
+    else if (
+        symbol->klass == Symbol::K_VARIABLE ||
+        symbol->klass == Symbol::K_ARGUMENT ||
+        symbol->klass == Symbol::K_FUNCTION
+    ) {
+        if (symbol_table->lookupDefineScope(name) == symbol_table->currentScope()) {
+            throw ParseRedefinedErrorException(location, name, symbol->location);
+        }
+    }
+    else {
+        throw ParseInvalidVariableNameException(location, name);
+    }
+}
+
+Symbol *
+Parser::checkFunctionDefined(std::string name, FunctionType *type)
+{
+    auto symbol = symbol_table->lookup(name);
+    if (!symbol) { return nullptr; }
+    if (
+        symbol->klass == Symbol::K_PRIMITIVE ||
+        symbol->klass == Symbol::K_CONCEPT ||
+        symbol->klass == Symbol::K_STRUCT
+        ) {
+        throw ParseRedefinedErrorException(location, name, symbol->location);
+    }
+    else if (
+        symbol->klass == Symbol::K_VARIABLE ||
+        symbol->klass == Symbol::K_ARGUMENT
+    ) {
+        if (symbol_table->lookupDefineScope(name) == symbol_table->currentScope()) {
+            throw ParseRedefinedErrorException(location, name, symbol->location);
+        }
+    }
+    else if (
+        symbol->klass == Symbol::K_FUNCTION
+    ) {
+        if (!symbol->type->equalTo(type) || symbol->token_value) {
+            throw ParseRedefinedErrorException(location, name, symbol->location);
+        }
+        return symbol;
+    }
+    else {
+        throw ParseInvalidVariableNameException(location, name);
+    }
+
+    return nullptr;
+}
+
+Type *
+Parser::checkTypeName(std::string name)
+{
+    auto symbol = symbol_table->lookup(name);
+    if (!symbol) {
+        throw ParseUndefinedErrorException(
+            location,
+            "type `" + name + "`"
+        );
+    }
+
+    if (
+        symbol->klass != Symbol::K_PRIMITIVE &&
+        symbol->klass != Symbol::K_STRUCT &&
+        symbol->klass != Symbol::K_CONCEPT
+    ) {
+        throw ParseExpectErrorException(
+            location,
+            "type name",
+            name
+        );
+    }
+
+    return symbol->type;
+}
+
+void
+Parser::parseGlobalLetStmt()
+{
+    current_function = ir_builder->findFunction("_init_");
+    current_block = current_function->newBasicBlock();
+
+    assert(_peak() == T_ID);
+
+    auto *symbol = symbol_table->lookup(peaking_string);
+    assert(symbol);
+    assert(symbol->token_value == R_LET);
+
+    do {
+        if (_next() != T_ID) {
+            throw ParseExpectErrorException(location, "identifier", _tokenLiteral());
+        }
+
+        auto variable_name = peaking_string;
+        checkVariableDefined(variable_name);
+
+        if (_next() != '=') {
+            throw ParseExpectErrorException(location, "'='", _tokenLiteral());
+        }
+        _next();
+        parseExpression();
+
+        if (is_left_value) {
+            result_inst = current_block->LoadInst(last_type, result_inst);
+        }
+        auto variable_address = current_block->GlobalInst(type_pool->getPointerType(last_type), variable_name);
+        current_block->StoreInst(last_type, variable_address, result_inst);
+
+        symbol_table->defineSymbol(
+            variable_name,
+            location,
+            variable_name,
+            Symbol::K_GLOBAL,
+            0,
+            false,
+            last_type
+        );
+    } while (_peak() == ',');
+
+    if (_peak() != ';') {
+        throw ParseExpectErrorException(location, "';'", _tokenLiteral());
+    }
+    _next();
+}
+
+void
+Parser::parseFunctionDefine()
+{
+    assert(_peak() == T_ID);
+    auto *symbol = symbol_table->lookup(peaking_string);
+    assert(symbol);
+    assert(symbol->token_value = R_FUNCTION);
+
+    if (_next() != T_ID) {
+        throw ParseExpectErrorException(location, "function name", _tokenLiteral());
+    }
+
+    auto function_name = peaking_string;
+    symbol_table->pushScope();
+
+    _next();
+    try { parsePrototype(); }
+    catch (const ParseErrorException &e) {
+        symbol_table->popScope();
+        throw e;
+    }
+    auto forward_symbol = checkFunctionDefined(function_name, dynamic_cast<FunctionType*>(last_type));
+
+    if (_peak() == ';') {
+        _next();
+        symbol_table->defineSymbolInRoot(
+            function_name,
+            location,
+            function_name,
+            Symbol::K_FUNCTION,
+            0,
+            false,
+            last_type
+        );
+        return;
+    }
+    else if (_peak() != '{') {
+        throw ParseExpectErrorException(location, "function body", _tokenLiteral());
+    }
+
+    current_function = ir_builder->newFunction(function_name);
+    current_block = current_function->newBasicBlock("entry");
+    if (forward_symbol) {
+        forward_symbol->token_value = reinterpret_cast<intptr_t>(current_function->get());
+    }
+    else {
+        symbol_table->defineSymbolInRoot(
+            function_name,
+            location,
+            function_name,
+            Symbol::K_FUNCTION,
+            reinterpret_cast<intptr_t>(current_function->get()),
+            false,
+            last_type
+        );
+    }
+
+    try { parseFunctionBody(); }
+    catch (const ParseErrorException &e) {
+        symbol_table->popScope();
+        throw e;
+    }
+
+    symbol_table->popScope();
+}
+
+void
+Parser::parsePrototype()
+{
+    auto builder = type_pool->getFunctionTypeBuilder();
+
+    if (_peak() != '(') {
+        throw ParseExpectErrorException(location, "function arguments", _tokenLiteral());
+    }
+    int argument_counter = 0;
+    _next();
+    while (_peak() != ')') {
+        if (_peak() != T_ID) {
+            throw ParseExpectErrorException(location, "function arguments name", _tokenLiteral());
+        }
+
+        auto argument_name = peaking_string;
+        checkVariableDefined(argument_name);
+
+        if (_next() != ':') {
+            throw ParseExpectErrorException(location, "function arguments type", _tokenLiteral());
+        }
+
+        bool use_left_value = false;
+        if (_next() == '&') {
+            use_left_value = true;
+            _next();
+        }
+
+        if (_peak() != T_ID) {
+            throw ParseExpectErrorException(location, "function arguments type", _tokenLiteral());
+        }
+
+        Type *argument_type = checkTypeName(peaking_string);
+        if (use_left_value) { argument_type = type_pool->getPointerType(argument_type); }
+
+        symbol_table->defineSymbol(
+            argument_name,
+            location,
+            argument_name,
+            Symbol::K_ARGUMENT,
+            argument_counter++,
+            false,
+            argument_type
+        );
+
+        builder.addArgument(argument_type);
+        if (_next() != ',') {
+            if (_peak() == ')') {
+                break;
+            }
+            else {
+                throw ParseExpectErrorException(location, "','", _tokenLiteral());
+            }
+        }
+        _next();
+    }
+
+    FunctionType *function_type;
+    if (_next() != ':') {
+        function_type = builder.commit(type_pool->getVoidType());
+    }
+    else {
+        if (_next() != T_ID) {
+            throw ParseExpectErrorException(location, "function return type", _tokenLiteral());
+        }
+
+        function_type = builder.commit(checkTypeName(peaking_string));
+        _next();
+    }
+
+    last_type = function_type;
+}
+
+void
+Parser::parseFunctionBody()
+{
+    assert(_peak() == '{');
+    _next();
+
+    while (_peak() != T_EOF && _peak() != '}') {
+        try {
+            parseStatement();
+        }
+        catch (const ParseErrorException &e) {
+            error_collector->error(e);
+            while (_peak() != T_EOF && _peak() != '}' && _peak() != ';') {
+                _next();
+            }
+            _next();
+        }
+    }
+
+    if (_peak() == T_EOF) {
+        throw ParseErrorException(location, "unexpected EOF");
+    }
+    else {
+        _next();
+    }
+}
+
+void
+Parser::parseStatement()
+{
+    if (_peak() == T_ID) {
+        auto symbol = symbol_table->lookup(peaking_string);
+        if (symbol->klass == Symbol::K_RESERVED) {
+            switch (symbol->token_value) {
+                case R_LET:
+                    parseLetStmt();
+                    return;
+                default:
+                    throw ParseExpectErrorException(location, "statement", _tokenLiteral());
+            }
+        }
+    }
+    parseExpression();
 }
 
 void
@@ -272,14 +622,7 @@ Parser::parseLetStmt()
         }
 
         auto variable_name = peaking_string;
-
-        if (symbol_table->lookupDefineScope(peaking_string) == symbol_table->currentScope()) {
-            throw ParseRedefinedErrorException(
-                location,
-                peaking_string,
-                symbol_table->lookup(peaking_string)->location
-            );
-        }
+        checkVariableDefined(variable_name);
 
         if (_next() != '=') {
             throw ParseExpectErrorException(location, "'='", _tokenLiteral());
@@ -287,12 +630,22 @@ Parser::parseLetStmt()
         _next();
         parseExpression();
 
-        symbol_table->definedSymbol(
+        if (is_left_value) {
+            result_inst = current_block->LoadInst(last_type, result_inst);
+        }
+        auto variable_address = current_block->AllocaInst(
+            type_pool->getPointerType(last_type),
+            current_block->UnsignedImmInst(type_pool->getUnsignedIntegerType(CYAN_PRODUCT_BITS), 1),
+            variable_name
+        );
+        current_block->StoreInst(last_type, variable_address, result_inst);
+
+        symbol_table->defineSymbol(
             variable_name,
             location,
             variable_name,
             Symbol::K_VARIABLE,
-            0,
+            reinterpret_cast<intptr_t>(variable_address),
             false,
             last_type
         );
@@ -313,7 +666,7 @@ Parser::parseAssignmentExpr()
 {
     parseConditionalExpr();
 
-    while (
+    if (
         (_peak() >= static_cast<int>(T_OR_ASSIGN) &&
              _peak() <= static_cast<int>(T_ADD_ASSIGN))
         || _peak() == '='
@@ -327,11 +680,16 @@ Parser::parseAssignmentExpr()
         }
 
         Type *left_hand_type = last_type;
+        auto left_hand_result = result_inst;
 
         _next();
         parseAssignmentExpr();
 
         Type *right_hand_type = last_type;
+        auto right_hand_result = result_inst;
+        if (is_left_value) {
+            right_hand_result = current_block->LoadInst(right_hand_type, right_hand_result);
+        }
 
         if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
             if (op != '=') {
@@ -360,6 +718,45 @@ Parser::parseAssignmentExpr()
 
         last_type = left_hand_type;
         is_left_value = true;
+        if (op != '=') {
+            auto left_original = current_block->LoadInst(left_hand_type, left_hand_result);
+            switch (op) {
+                case T_ADD_ASSIGN:
+                    right_hand_result = current_block->AddInst(left_hand_type, left_original, right_hand_result);
+                    break;
+                case T_SUB_ASSIGN:
+                    right_hand_result = current_block->SubInst(left_hand_type, left_original, right_hand_result);
+                    break;
+                case T_MUL_ASSIGN:
+                    right_hand_result = current_block->MulInst(left_hand_type, left_original, right_hand_result);
+                    break;
+                case T_DIV_ASSIGN:
+                    right_hand_result = current_block->DivInst(left_hand_type, left_original, right_hand_result);
+                    break;
+                case T_MOD_ASSIGN:
+                    right_hand_result = current_block->ModInst(left_hand_type, left_original, right_hand_result);
+                    break;
+                case T_SHL_ASSIGN:
+                    right_hand_result = current_block->ShlInst(left_hand_type, left_original, right_hand_result);
+                    break;
+                case T_SHR_ASSIGN:
+                    right_hand_result = current_block->ShrInst(left_hand_type, left_original, right_hand_result);
+                    break;
+                case T_AND_ASSIGN:
+                    right_hand_result = current_block->AndInst(left_hand_type, left_original, right_hand_result);
+                    break;
+                case T_XOR_ASSIGN:
+                    right_hand_result = current_block->XorInst(left_hand_type, left_original, right_hand_result);
+                    break;
+                case T_OR_ASSIGN:
+                    right_hand_result = current_block->OrInst(left_hand_type, left_original, right_hand_result);
+                    break;
+                default:
+                    assert(false);
+            }
+        }
+        current_block->StoreInst(left_hand_type, left_hand_result, right_hand_result);
+        result_inst = left_hand_result;
     }
 }
 
@@ -376,16 +773,34 @@ Parser::parseConditionalExpr()
             ));
         }
 
+        auto then_block = current_function->newBasicBlock();
+        auto else_block = current_function->newBasicBlock();
+        auto follow_block = current_function->newBasicBlock();
+
+        current_block->BrInst(result_inst, then_block->get(), else_block->get());
+        current_block.swap(then_block);
+
         _next();
         parseConditionalExpr();
 
         Type *then_part_type = last_type;
+
+        auto result_phi = follow_block->newPhiBuilder(then_part_type);
+        result_phi.addBranch(result_inst, current_block->get());
+        current_block->JumpInst(follow_block->get());
+
+        current_block.swap(else_block);
 
         if (_peak() != ':') {
             throw ParseExpectErrorException(location, "':'", _tokenLiteral());
         }
         _next();
         parseConditionalExpr();
+
+        result_phi.addBranch(result_inst, current_block->get());
+        current_block->JumpInst(follow_block->get());
+
+        current_block.swap(follow_block);
 
         Type *else_part_type = last_type;
 
@@ -416,6 +831,8 @@ Parser::parseConditionalExpr()
             last_type = then_part_type;
         }
         is_left_value = false;
+
+        result_inst = result_phi.commit();
     }
 }
 
@@ -424,36 +841,53 @@ Parser::parseLogicOrExpr()
 {
     parseLogicAndExpr();
 
-    while (_peak() == T_LOGIC_OR) {
-        Type *left_hand_type = last_type;
-        auto op = _peak();
+    if (_peak() == T_LOGIC_OR) {
+        auto follow_block = current_function->newBasicBlock();
+        auto result_phi = follow_block->newPhiBuilder(last_type);
 
-        _next();
-        parseLogicAndExpr();
+        while (_peak() == T_LOGIC_OR) {
+            Type *left_hand_type = last_type;
+            auto op = _peak();
+            auto new_block = current_function->newBasicBlock();
 
-        Type *right_hand_type = last_type;
+            current_block->BrInst(result_inst, follow_block->get(), new_block->get());
+            result_phi.addBranch(result_inst, current_block->get());
 
-        if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
-            error_collector->error(ParseTypeErrorException(
-                location,
-                std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
-                left_hand_type->to_string() + " and " + right_hand_type->to_string()
-            ));
+            current_block.swap(new_block);
+
+            _next();
+            parseLogicAndExpr();
+
+            Type *right_hand_type = last_type;
+
+            if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
+                error_collector->error(ParseTypeErrorException(
+                    location,
+                    std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
+                    left_hand_type->to_string() + " and " + right_hand_type->to_string()
+                ));
+            }
+
+            IntegeralType *left_hand_int_type = dynamic_cast<IntegeralType*>(left_hand_type);
+            IntegeralType *right_hand_int_type = dynamic_cast<IntegeralType*>(right_hand_type);
+            size_t bitwise_width = std::max(
+                left_hand_int_type->getBitwiseWidth(),
+                right_hand_int_type->getBitwiseWidth()
+            );
+            if (!left_hand_int_type->isSigned() || !right_hand_int_type->isSigned()) {
+                last_type = type_pool->getUnsignedIntegerType(bitwise_width);
+            }
+            else {
+                last_type = type_pool->getSignedIntegerType(bitwise_width);
+            }
+            is_left_value = false;
         }
 
-        IntegeralType *left_hand_int_type = dynamic_cast<IntegeralType*>(left_hand_type);
-        IntegeralType *right_hand_int_type = dynamic_cast<IntegeralType*>(right_hand_type);
-        size_t bitwise_width = std::max(
-            left_hand_int_type->getBitwiseWidth(),
-            right_hand_int_type->getBitwiseWidth()
-        );
-        if (!left_hand_int_type->isSigned() || !right_hand_int_type->isSigned()) {
-            last_type = type_pool->getUnsignedIntegerType(bitwise_width);
-        }
-        else {
-            last_type = type_pool->getSignedIntegerType(bitwise_width);
-        }
-        is_left_value = false;
+        current_block->JumpInst(follow_block->get());
+        result_phi.addBranch(result_inst, current_block->get());
+
+        current_block.swap(follow_block);
+        result_inst = result_phi.commit();
     }
 }
 
@@ -462,36 +896,53 @@ Parser::parseLogicAndExpr()
 {
     parseBitwiseOrExpr();
 
-    while (_peak() == T_LOGIC_AND)  {
-        Type *left_hand_type = last_type;
-        auto op = _peak();
+    if (_peak() == T_LOGIC_AND) {
+        auto follow_block = current_function->newBasicBlock();
+        auto result_phi = follow_block->newPhiBuilder(last_type);
 
-        _next();
-        parseBitwiseOrExpr();
+        while (_peak() == T_LOGIC_AND)  {
+            Type *left_hand_type = last_type;
+            auto op = _peak();
+            auto new_block = current_function->newBasicBlock();
 
-        Type *right_hand_type = last_type;
+            current_block->BrInst(result_inst, new_block->get(), follow_block->get());
+            result_phi.addBranch(result_inst, current_block->get());
 
-        if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
-            error_collector->error(ParseTypeErrorException(
-                location,
-                std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
-                left_hand_type->to_string() + " and " + right_hand_type->to_string()
-            ));
+            current_block.swap(new_block);
+
+            _next();
+            parseBitwiseOrExpr();
+
+            Type *right_hand_type = last_type;
+
+            if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
+                error_collector->error(ParseTypeErrorException(
+                    location,
+                    std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
+                    left_hand_type->to_string() + " and " + right_hand_type->to_string()
+                ));
+            }
+
+            IntegeralType *left_hand_int_type = dynamic_cast<IntegeralType*>(left_hand_type);
+            IntegeralType *right_hand_int_type = dynamic_cast<IntegeralType*>(right_hand_type);
+            size_t bitwise_width = std::max(
+                left_hand_int_type->getBitwiseWidth(),
+                right_hand_int_type->getBitwiseWidth()
+            );
+            if (!left_hand_int_type->isSigned() || !right_hand_int_type->isSigned()) {
+                last_type = type_pool->getUnsignedIntegerType(bitwise_width);
+            }
+            else {
+                last_type = type_pool->getSignedIntegerType(bitwise_width);
+            }
+            is_left_value = false;
         }
 
-        IntegeralType *left_hand_int_type = dynamic_cast<IntegeralType*>(left_hand_type);
-        IntegeralType *right_hand_int_type = dynamic_cast<IntegeralType*>(right_hand_type);
-        size_t bitwise_width = std::max(
-            left_hand_int_type->getBitwiseWidth(),
-            right_hand_int_type->getBitwiseWidth()
-        );
-        if (!left_hand_int_type->isSigned() || !right_hand_int_type->isSigned()) {
-            last_type = type_pool->getUnsignedIntegerType(bitwise_width);
-        }
-        else {
-            last_type = type_pool->getSignedIntegerType(bitwise_width);
-        }
-        is_left_value = false;
+        current_block->JumpInst(follow_block->get());
+        result_phi.addBranch(result_inst, current_block->get());
+
+        current_block.swap(follow_block);
+        result_inst = result_phi.commit();
     }
 }
 
@@ -503,11 +954,19 @@ Parser::parseBitwiseOrExpr()
     while (_peak() == '|') {
         Type *left_hand_type = last_type;
         auto op = _peak();
+        auto left_hand_result = result_inst;
+        if (is_left_value) {
+            left_hand_result = current_block->LoadInst(left_hand_type, left_hand_result);
+        }
 
         _next();
         parseBitwiseXorExpr();
 
         Type *right_hand_type = last_type;
+        auto right_hand_result = result_inst;
+        if (is_left_value) {
+            right_hand_result = current_block->LoadInst(right_hand_type, right_hand_result);
+        }
 
         if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
             error_collector->error(ParseTypeErrorException(
@@ -530,6 +989,7 @@ Parser::parseBitwiseOrExpr()
             last_type = type_pool->getSignedIntegerType(bitwise_width);
         }
         is_left_value = false;
+        result_inst = current_block->OrInst(last_type, left_hand_result, right_hand_result);
     }
 }
 
@@ -541,11 +1001,19 @@ Parser::parseBitwiseXorExpr()
     while (_peak() == '^') {
         Type *left_hand_type = last_type;
         auto op = _peak();
+        auto left_hand_result = result_inst;
+        if (is_left_value) {
+            left_hand_result = current_block->LoadInst(left_hand_type, left_hand_result);
+        }
 
         _next();
         parseBitwiseAndExpr();
 
         Type *right_hand_type = last_type;
+        auto right_hand_result = result_inst;
+        if (is_left_value) {
+            right_hand_result = current_block->LoadInst(right_hand_type, right_hand_result);
+        }
 
         if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
             error_collector->error(ParseTypeErrorException(
@@ -568,6 +1036,7 @@ Parser::parseBitwiseXorExpr()
             last_type = type_pool->getSignedIntegerType(bitwise_width);
         }
         is_left_value = false;
+        result_inst = current_block->XorInst(last_type, left_hand_result, right_hand_result);
     }
 }
 
@@ -579,11 +1048,19 @@ Parser::parseBitwiseAndExpr()
     while (_peak() == '&') {
         Type *left_hand_type = last_type;
         auto op = _peak();
+        auto left_hand_result = result_inst;
+        if (is_left_value) {
+            left_hand_result = current_block->LoadInst(left_hand_type, left_hand_result);
+        }
 
         _next();
         parseEqualityExpr();
 
         Type *right_hand_type = last_type;
+        auto right_hand_result = result_inst;
+        if (is_left_value) {
+            right_hand_result = current_block->LoadInst(right_hand_type, right_hand_result);
+        }
 
         if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
             error_collector->error(ParseTypeErrorException(
@@ -606,6 +1083,7 @@ Parser::parseBitwiseAndExpr()
             last_type = type_pool->getSignedIntegerType(bitwise_width);
         }
         is_left_value = false;
+        result_inst = current_block->AndInst(last_type, left_hand_result, right_hand_result);
     }
 }
 
@@ -616,11 +1094,20 @@ Parser::parseEqualityExpr()
 
     while (_peak() == T_EQ || _peak() == T_NE) {
         Type *left_hand_type = last_type;
+        auto op = _peak();
+        auto left_hand_result = result_inst;
+        if (is_left_value) {
+            left_hand_result = current_block->LoadInst(left_hand_type, left_hand_result);
+        }
 
         _next();
         parseCompareExpr();
 
         Type *right_hand_type = last_type;
+        auto right_hand_result = result_inst;
+        if (is_left_value) {
+            right_hand_result = current_block->LoadInst(right_hand_type, right_hand_result);
+        }
 
         if (
             (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) &&
@@ -634,6 +1121,17 @@ Parser::parseEqualityExpr()
         }
         last_type = type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS);
         is_left_value = false;
+        result_inst = current_block->SeqInst(last_type, left_hand_result, right_hand_result);
+        if (op == T_NE) {
+            result_inst = current_block->SeqInst(
+                last_type,
+                result_inst,
+                current_block->SignedImmInst(
+                    type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                    0
+                )
+            );
+        }
     }
 }
 
@@ -645,11 +1143,20 @@ Parser::parseCompareExpr()
     while (_peak() == '<' || _peak() == T_LE ||
            _peak() == '>' || _peak() == T_GE) {
         Type *left_hand_type = last_type;
+        auto op = _peak();
+        auto left_hand_result = result_inst;
+        if (is_left_value) {
+            left_hand_result = current_block->LoadInst(left_hand_type, left_hand_result);
+        }
 
         _next();
         parseShiftExpr();
 
         Type *right_hand_type = last_type;
+        auto right_hand_result = result_inst;
+        if (is_left_value) {
+            right_hand_result = current_block->LoadInst(right_hand_type, right_hand_result);
+        }
 
         if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
             error_collector->error(ParseTypeErrorException(
@@ -660,6 +1167,22 @@ Parser::parseCompareExpr()
         }
         last_type = type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS);
         is_left_value = false;
+        switch (op) {
+            case '<':
+                result_inst = current_block->SltInst(last_type, left_hand_result, right_hand_result);
+                break;
+            case '>':
+                result_inst = current_block->SltInst(last_type, right_hand_result, left_hand_result);
+                break;
+            case T_LE:
+                result_inst = current_block->SleInst(last_type, left_hand_result, right_hand_result);
+                break;
+            case T_GE:
+                result_inst = current_block->SleInst(last_type, right_hand_result, left_hand_result);
+                break;
+            default:
+                assert(false);
+        }
     }
 }
 
@@ -671,11 +1194,19 @@ Parser::parseShiftExpr()
     while (_peak() == T_SHL || _peak() == T_SHR) {
         Type *left_hand_type = last_type;
         auto op = _peak();
+        auto left_hand_result = result_inst;
+        if (is_left_value) {
+            left_hand_result = current_block->LoadInst(left_hand_type, left_hand_result);
+        }
 
         _next();
         parseAdditiveExpr();
 
         Type *right_hand_type = last_type;
+        auto right_hand_result = result_inst;
+        if (is_left_value) {
+            right_hand_result = current_block->LoadInst(right_hand_type, right_hand_result);
+        }
 
         if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
             error_collector->error(ParseTypeErrorException(
@@ -687,6 +1218,13 @@ Parser::parseShiftExpr()
 
         last_type = left_hand_type;
         is_left_value = false;
+
+        if (op == T_SHL) {
+            result_inst = current_block->ShlInst(last_type, left_hand_result, right_hand_result);
+        }
+        else {
+            result_inst = current_block->ShrInst(last_type, left_hand_result, right_hand_result);
+        }
     }
 }
 
@@ -698,11 +1236,19 @@ Parser::parseAdditiveExpr()
     while (_peak() == '+' || _peak() == '-') {
         Type *left_hand_type = last_type;
         auto op = _peak();
+        auto left_hand_result = result_inst;
+        if (is_left_value) {
+            left_hand_result = current_block->LoadInst(left_hand_type, left_hand_result);
+        }
 
         _next();
         parseMultiplitiveExpr();
 
         Type *right_hand_type = last_type;
+        auto right_hand_reuslt = result_inst;
+        if (is_left_value) {
+            right_hand_reuslt = current_block->LoadInst(right_hand_type, right_hand_reuslt);
+        }
 
         if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
             error_collector->error(ParseTypeErrorException(
@@ -725,6 +1271,16 @@ Parser::parseAdditiveExpr()
             last_type = type_pool->getUnsignedIntegerType(bitwise_width);
         }
         is_left_value = false;
+        switch (op) {
+            case '+':
+                result_inst = current_block->AddInst(last_type, left_hand_result, right_hand_reuslt);
+                break;
+            case '-':
+                result_inst = current_block->SubInst(last_type, left_hand_result, right_hand_reuslt);
+                break;
+            default:
+                assert(false);
+        }
     }
 }
 
@@ -736,11 +1292,19 @@ Parser::parseMultiplitiveExpr()
     while (_peak() == '*' || _peak() == '/' || _peak() == '%') {
         Type *left_hand_type = last_type;
         auto op = _peak();
+        auto left_hand_result = result_inst;
+        if (is_left_value) {
+            left_hand_result = current_block->LoadInst(left_hand_type, left_hand_result);
+        }
 
         _next();
         parsePrefixExpr();
 
         Type *right_hand_type = last_type;
+        auto right_hand_result = result_inst;
+        if (is_left_value) {
+            right_hand_result = current_block->LoadInst(right_hand_type, right_hand_result);
+        }
 
         if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
             error_collector->error(ParseTypeErrorException(
@@ -763,6 +1327,19 @@ Parser::parseMultiplitiveExpr()
             last_type = type_pool->getUnsignedIntegerType(bitwise_width);
         }
         is_left_value = false;
+        switch (op) {
+            case '*':
+                result_inst = current_block->MulInst(last_type, left_hand_result, right_hand_result);
+                break;
+            case '/':
+                result_inst = current_block->DivInst(last_type, left_hand_result, right_hand_result);
+                break;
+            case '%':
+                result_inst = current_block->ModInst(last_type, left_hand_result, right_hand_result);
+                break;
+            default:
+                assert(false);
+        }
     }
 }
 
@@ -784,6 +1361,18 @@ Parser::parsePrefixExpr()
                 "Self increment can only be applied on left value"
             ));
         }
+
+        auto original_address = result_inst;
+        auto original_value = current_block->LoadInst(last_type, original_address);
+        auto increased_value = current_block->AddInst(
+            last_type,
+            original_value,
+            current_block->SignedImmInst(
+                type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                1
+            )
+        );
+        current_block->StoreInst(last_type, original_address, increased_value);
     }
     else if (_peak() == T_DEC) {
         _next();
@@ -800,6 +1389,18 @@ Parser::parsePrefixExpr()
                 "Self decrement can only be applied on left value"
             ));
         }
+
+        auto original_address = result_inst;
+        auto original_value = current_block->LoadInst(last_type, original_address);
+        auto descreased_value = current_block->SubInst(
+            last_type,
+            original_value,
+            current_block->SignedImmInst(
+                type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                1
+            )
+        );
+        current_block->StoreInst(last_type, original_address, descreased_value);
     }
     else {
         parsePostfixExpr();
@@ -826,6 +1427,19 @@ Parser::parsePostfixExpr()
                 ));
             }
             is_left_value = false;
+
+            auto original_address = result_inst;
+            auto original_value = current_block->LoadInst(last_type, original_address);
+            auto increased_value = current_block->AddInst(
+                last_type,
+                original_value,
+                current_block->SignedImmInst(
+                    type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                    1
+                )
+            );
+            current_block->StoreInst(last_type, original_address, increased_value);
+            result_inst = original_value;
         }
         else if (_peak() == T_DEC) {
             if (!last_type->is<NumericType>()) {
@@ -841,6 +1455,19 @@ Parser::parsePostfixExpr()
                 ));
             }
             is_left_value = false;
+
+            auto original_address = result_inst;
+            auto original_value = current_block->LoadInst(last_type, original_address);
+            auto decreased_value = current_block->SubInst(
+                last_type,
+                original_value,
+                current_block->SignedImmInst(
+                    type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                    1
+                )
+            );
+            current_block->StoreInst(last_type, original_address, decreased_value);
+            result_inst = original_value;
         }
         else {
             break;
@@ -864,21 +1491,43 @@ Parser::parseUnaryExpr()
         }
         case T_ID:
         {
-            auto symbol = symbol_table->lookup(peaking_string);
+            auto variable_name = peaking_string;
+            auto symbol = symbol_table->lookup(variable_name);
             if (!symbol) {
-                throw ParseUndefinedErrorException(location, peaking_string);
+                throw ParseUndefinedErrorException(location, variable_name);
             }
 
             last_type = symbol->type;
             is_left_value = true;
+
+            if (symbol->klass == Symbol::K_GLOBAL) {
+                result_inst = current_block->GlobalInst(
+                    type_pool->getPointerType(last_type),
+                    variable_name
+                );
+            }
+            else if (symbol->klass == Symbol::K_ARGUMENT) {
+                result_inst = current_block->ArgInst(
+                    type_pool->getPointerType(last_type),
+                    symbol->token_value
+                );
+            }
+            else if (symbol->klass == Symbol::K_VARIABLE) {
+                result_inst = reinterpret_cast<Instrument *>(symbol->token_value);
+            }
+            else {
+                throw ParseExpectErrorException(location, "variable", _tokenLiteral());
+            }
 
             _next();
             break;
         }
         case T_INTEGER:
         {
-            last_type = type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS);
+            auto result_type = type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS);
+            last_type = result_type;
             is_left_value = false;
+            result_inst = current_block->SignedImmInst(result_type, peaking_int);
 
             _next();
             break;
