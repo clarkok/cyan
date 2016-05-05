@@ -85,18 +85,40 @@ Type::equalTo(Type *type) const
         return type->is<PointerType>() &&
                to<PointerType>()->getBaseType()->equalTo(type->to<PointerType>()->getBaseType());
     }
+    else if (is<ForwardType>()) {
+        if (type->is<ConceptType>()) {
+            return to<ForwardType>()->getName() == type->to<ConceptType>()->getName();
+        }
+        else if (type->is<StructType>()) {
+            return to<ForwardType>()->getName() == type->to<StructType>()->getName();
+        }
+        else if (type->is<ForwardType>()) {
+            return to<ForwardType>()->getName() == type->to<ForwardType>()->getName();
+        }
+        else {
+            return false;
+        }
+    }
     else if (is<ConceptType>()) {
+        if (type->is<ForwardType>()) {
+            return to<ConceptType>()->getName() == type->to<ForwardType>()->getName();
+        }
+
         return type->is<ConceptType>() &&
                to<ConceptType>()->getName() ==
                type->to<ConceptType>()->getName();
     }
     else if (is<StructType>()) {
+        if (type->is<ForwardType>()) {
+            return to<StructType>()->getName() == type->to<ForwardType>()->getName();
+        }
+
         return type->is<StructType>() &&
                to<StructType>()->getName() ==
                type->to<StructType>()->getName();
     }
     else {
-        assert(false && "should not reach here");
+        assert(false);
     }
 }
 
@@ -107,6 +129,14 @@ VoidType::size() const
 std::string
 VoidType::to_string() const
 { return "void"; }
+
+size_t
+ForwardType::size() const
+{ return 0; }
+
+std::string
+ForwardType::to_string() const
+{ return "forward " + getName(); }
 
 size_t
 IntegeralType::size() const
@@ -217,6 +247,18 @@ TypePool::getVoidType()
     return void_type.get();
 }
 
+ForwardType *
+TypePool::getForwardType(std::string name)
+{
+    if (forward_type.find(name) == forward_type.end()) {
+        forward_type.emplace(
+            name,
+            std::unique_ptr<ForwardType>(new ForwardType(name))
+        );
+    }
+    return forward_type[name].get();
+}
+
 SignedIntegerType *
 TypePool::getSignedIntegerType(size_t bitwise_width)
 {
@@ -251,4 +293,11 @@ TypePool::getPointerType(Type *base_type)
         );
     }
     return pointer_type[base_type].get();
+}
+
+MethodType *
+TypePool::getMethodType(ConceptType *owner, FunctionType *function)
+{
+    method_type.emplace_back(std::unique_ptr<MethodType>(MethodType::fromFunction(owner, function)));
+    return method_type.back().get();
 }

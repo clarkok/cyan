@@ -227,10 +227,14 @@ private:
 protected:
     void checkVariableDefined(std::string name);
     Symbol *checkFunctionDefined(std::string name, FunctionType *type);
+    Symbol *checkConceptDefined(std::string name);
+    Symbol *checkStructDefined(std::string name);
     Type *checkTypeName(std::string name);
 
     void parseGlobalLetStmt();
     void parseFunctionDefine();
+    void parseConceptDefine();
+    void parseStructDefine();
 
     void parsePrototype();
     void parseFunctionBody();

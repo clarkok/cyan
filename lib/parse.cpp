@@ -236,6 +236,7 @@ Parser::parse()
             }
 
             if (symbol->token_value == R_CONCEPT) {
+                parseConceptDefine();
             }
             else if (symbol->token_value == R_FUNCTION) {
                 parseFunctionDefine();
@@ -244,6 +245,7 @@ Parser::parse()
                 parseGlobalLetStmt();
             }
             else if (symbol->token_value == R_STRUCT) {
+                parseStructDefine();
             }
             else {
                 throw ParseErrorException(
@@ -372,6 +374,56 @@ Parser::checkFunctionDefined(std::string name, FunctionType *type)
     }
 
     return nullptr;
+}
+
+Symbol *
+Parser::checkConceptDefined(std::string name)
+{
+    auto symbol = symbol_table->lookup(name);
+    if (!symbol) { return nullptr; }
+    else if (symbol->klass == Symbol::K_CONCEPT) {
+        if (symbol->type) {
+            throw ParseRedefinedErrorException(
+                location,
+                name,
+                symbol->location
+            );
+        }
+        else {
+            return symbol;
+        }
+    }
+
+    throw ParseRedefinedErrorException(
+        location,
+        name,
+        symbol->location
+    );
+}
+
+Symbol *
+Parser::checkStructDefined(std::string name)
+{
+    auto symbol = symbol_table->lookup(name);
+    if (!symbol) { return nullptr; }
+    else if (symbol->klass == Symbol::K_STRUCT) {
+        if (symbol->type) {
+            throw ParseRedefinedErrorException(
+                location,
+                name,
+                symbol->location
+            );
+        }
+        else {
+            return symbol;
+        }
+    }
+
+    throw ParseRedefinedErrorException(
+        location,
+        name,
+        symbol->location
+    );
 }
 
 Type *
@@ -513,6 +565,289 @@ Parser::parseFunctionDefine()
     }
 
     symbol_table->popScope();
+}
+
+void
+Parser::parseConceptDefine()
+{
+    assert(_peak() == T_ID);
+    auto *symbol = symbol_table->lookup(peaking_string);
+    assert(symbol);
+    assert(symbol->token_value = R_CONCEPT);
+
+    if (_next() != T_ID) {
+        throw ParseExpectErrorException(location, "concept name", _tokenLiteral());
+    }
+    auto concept_name = peaking_string;
+    auto *forward_decl = checkConceptDefined(concept_name);
+
+    if (_next() == ';') {
+        _next();
+        if (!forward_decl) {
+            symbol_table->defineSymbol(
+                concept_name,
+                location,
+                concept_name,
+                Symbol::K_CONCEPT,
+                0,
+                false,
+                type_pool->getForwardType(concept_name)
+            );
+        }
+        return;
+    }
+
+    ConceptType *base_concept = nullptr;
+    if (_peak() == ':') {
+        if (_next() != T_ID) {
+            throw ParseExpectErrorException(
+                location,
+                "base concept",
+                _tokenLiteral()
+            );
+        }
+
+        auto base_concept_name = peaking_string;
+        symbol = symbol_table->lookup(base_concept_name);
+        if (!symbol || symbol->klass != Symbol::K_CONCEPT) {
+            throw ParseTypeErrorException(
+                location,
+                "`" + base_concept_name + "` is not a concept"
+            );
+        }
+        base_concept = symbol->type->to<ConceptType>();
+
+        _next();
+    }
+
+    if (_peak() != '{') {
+        throw ParseExpectErrorException(
+            location,
+            "concept definition",
+            _tokenLiteral()
+        );
+    }
+    _next();
+
+    auto builder = type_pool->getConceptTypeBuilder(concept_name, base_concept);
+
+    while (_peak() != T_EOF && _peak() != '}') {
+        symbol = symbol_table->lookup(peaking_string);
+        if (
+            _peak() != T_ID ||
+            !symbol ||
+            symbol->klass != Symbol::K_RESERVED ||
+            symbol->token_value != R_FUNCTION
+            ) {
+            throw ParseExpectErrorException(
+                location,
+                "concept methods",
+                _tokenLiteral()
+            );
+        }
+
+        if (_next() != T_ID) {
+            throw ParseExpectErrorException(
+                location,
+                "concept method name",
+                _tokenLiteral()
+            );
+        }
+        auto method_name = peaking_string;
+        checkVariableDefined(method_name);
+        _next();
+
+        symbol_table->pushScope();
+
+        try {
+            parsePrototype();
+            MethodType *prototype = type_pool->getMethodType(
+                builder.get(),
+                last_type->to<FunctionType>()
+            );
+
+            if (_peak() == '{') {
+                symbol_table->defineSymbol(
+                    "this",
+                    location,
+                    "this",
+                    Symbol::K_ARGUMENT,
+                    prototype->arguments_size(),
+                    false,
+                    builder.get()
+                );
+
+                current_function = ir_builder->newFunction(
+                    concept_name + "::" + method_name,
+                    last_type->to<FunctionType>()
+                );
+                current_block = current_function->newBasicBlock("entry");
+                try {
+                    builder.addMethod(method_name, prototype, current_function->get());
+                }
+                catch (const std::exception &e) {
+                    throw ParseErrorException(
+                        location,
+                        e.what()
+                    );
+                }
+                parseFunctionBody();
+            }
+            else {
+                if (_peak() != ';') {
+                    throw ParseExpectErrorException(
+                        location,
+                        "';'",
+                        _tokenLiteral()
+                    );
+                }
+                _next();
+            }
+        }
+        catch (const ParseErrorException &e) {
+            symbol_table->popScope();
+            error_collector->error(e);
+            while (_peak() != T_EOF && _peak() != '}') {
+                if (_peak() == T_ID) {
+                    symbol = symbol_table->lookup(peaking_string);
+                    if (
+                        symbol &&
+                        symbol->klass == Symbol::K_RESERVED &&
+                        symbol->token_value == R_FUNCTION
+                    ) {
+                        break;
+                    }
+                }
+                _next();
+            }
+            continue;
+        }
+        symbol_table->popScope();
+    }
+    if (_peak() == T_EOF) {
+        throw ParseErrorException(
+            location,
+            "unexpected EOF"
+        );
+    }
+    _next();
+
+    if (forward_decl) {
+        forward_decl->type = builder.commit();
+    }
+    else {
+        symbol_table->defineSymbol(
+            concept_name,
+            location,
+            concept_name,
+            Symbol::K_CONCEPT,
+            0,
+            false,
+            builder.commit()
+        );
+    }
+}
+
+void
+Parser::parseStructDefine()
+{
+    assert(_peak() == T_ID);
+    auto *symbol = symbol_table->lookup(peaking_string);
+    assert(symbol);
+    assert(symbol->token_value = R_CONCEPT);
+
+    if (_next() != T_ID) {
+        throw ParseExpectErrorException(location, "struct name", _tokenLiteral());
+    }
+    auto struct_name = peaking_string;
+    auto *forward_decl = checkStructDefined(struct_name);
+
+    if (_next() == ';') {
+        _next();
+        if (!forward_decl) {
+            symbol_table->defineSymbol(
+                struct_name,
+                location,
+                struct_name,
+                Symbol::K_STRUCT,
+                0,
+                false,
+                type_pool->getForwardType(struct_name)
+            );
+        }
+        return;
+    }
+
+    if (_peak() != '{') {
+        throw ParseExpectErrorException(
+            location,
+            "struct definition",
+            _tokenLiteral()
+        );
+    }
+    _next();
+
+    auto builder = type_pool->getStructTypeBuilder(struct_name);
+
+    while (_peak() != T_EOF && _peak() != '}') {
+        if (_peak() != T_ID) {
+            throw ParseExpectErrorException(
+                location,
+                "struct member name",
+                _tokenLiteral()
+            );
+        }
+        auto member_name = peaking_string;
+
+        if (_next() != ':') {
+            throw ParseExpectErrorException(
+                location,
+                "struct member type",
+                _tokenLiteral()
+            );
+        }
+
+        if (_next() != T_ID) {
+            throw ParseExpectErrorException(
+                location,
+                "struct member type",
+                _tokenLiteral()
+            );
+        }
+
+        builder.addMember(member_name, checkTypeName(peaking_string));
+        _next();
+
+        if (_peak() == '}') {
+            break;
+        }
+        else if (_peak() != ',') {
+            throw ParseExpectErrorException(
+                location,
+                "','",
+                _tokenLiteral()
+            );
+        }
+        _next();
+    }
+
+    symbol_table->defineSymbol(
+        struct_name,
+        location,
+        struct_name,
+        Symbol::K_STRUCT,
+        0,
+        false,
+        builder.commit()
+    );
+
+    if (_peak() == T_EOF) {
+        throw ParseErrorException(
+            location,
+            "unexpected EOF"
+        );
+    }
+    _next();
 }
 
 void
@@ -988,7 +1323,7 @@ Parser::parseContinueStmt()
     if (loop_stack.empty()) {
         throw ParseErrorException(
             location,
-            "break appear out of loop"
+            "continue appear out of loop"
         );
     }
 

@@ -264,7 +264,7 @@ TEST(parser_test, break_test)
     // uut->release()->output(std::cout);
 }
 
-TEST(parser_test, nested_loop)
+TEST(parser_test, nested_loop_test)
 {
     static const char SOURCE[] =
         "function main() {\n"
@@ -278,6 +278,39 @@ TEST(parser_test, nested_loop)
         "        if (j == 0) continue;\n"
         "    }\n"
         "}"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, concept_test)
+{
+    static const char SOURCE[] =
+        "concept Person {\n"
+        "    function getID() : u32;\n"
+        "    function getAge() : u32;\n"
+        "}\n"
+        "concept Student : Person {\n"
+        "    function getID() : u32 { return 0; }\n"
+        "}\n"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, struct_test)
+{
+    static const char SOURCE[] =
+        "struct Student {\n"
+        "    id : i32,\n"
+        "    age : i32\n"
+        "}\n"
     ;
 
     Parser *uut = new Parser(SOURCE);

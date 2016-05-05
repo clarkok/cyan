@@ -10,10 +10,13 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <exception>
 
 #include "cyan.hpp"
 
 namespace cyan {
+
+class Function;
 
 class Type
 {
@@ -43,6 +46,23 @@ class VoidType : public Type
 {
 public:
     VoidType() = default;
+
+    virtual size_t size() const;
+    virtual std::string to_string() const;
+};
+
+class ForwardType : public Type
+{
+protected:
+    std::string name;
+public:
+    ForwardType(std::string name)
+        : name(name)
+    { }
+
+    inline std::string
+    getName() const
+    { return name; }
 
     virtual size_t size() const;
     virtual std::string to_string() const;
@@ -216,33 +236,79 @@ public:
 
 class ConceptType : public Type
 {
+public:
+    struct Method
+    {
+        std::string name;
+        MethodType *prototype;
+        Function *impl;
+
+        Method(std::string name, MethodType *prototype, Function *impl)
+            : name(name), prototype(prototype), impl(impl)
+        { }
+    };
+
+    struct RedefinedMethodException : std::exception
+    {
+        std::string _what;
+
+        RedefinedMethodException(std::string name, MethodType *original_prototype)
+            : _what("method `" + name + "` is already defined as " + original_prototype->to_string())
+        { }
+
+        virtual const char *
+        what() const noexcept
+        { return _what.c_str(); }
+    };
+
 protected:
     std::string name;
-    std::vector<MethodType *> methods;
+    ConceptType *base_concept;
+    std::vector<Method> methods;
 
-    ConceptType(std::string name)
-        : name(name)
+    ConceptType(std::string name, ConceptType *base_concept)
+        : name(name), base_concept(base_concept)
     { }
 public:
     struct Builder
     {
     private:
         std::unique_ptr<ConceptType> product;
-
     public:
-        Builder(std::string name)
-            : product(new ConceptType(name))
-        { }
-
         inline ConceptType *
         release()
         { return product.release(); }
 
+        inline ConceptType *
+        get() const
+        { return product.get(); }
+
         inline Builder &
-        addMethod(MethodType *method)
+        addMethod(std::string name, MethodType *prototype, Function *impl)
         {
-            product->methods.push_back(method);
+            for (auto &m : *product) {
+                if (m.name == name) {
+                    if (m.prototype->equalTo(prototype)) {
+                        m.impl = impl ? impl : m.impl;
+                        return *this;
+                    }
+                    else {
+                        throw RedefinedMethodException(name, m.prototype);
+                    }
+                }
+            }
+            product->methods.emplace_back(name, prototype, impl);
             return *this;
+        }
+
+        Builder(std::string name, ConceptType *base_concept)
+            : product(new ConceptType(name, base_concept))
+        {
+            if (base_concept) {
+                for (auto &m : *base_concept) {
+                    addMethod(m.name, m.prototype, m.impl);
+                }
+            }
         }
     };
 
@@ -288,6 +354,19 @@ public:
         { }
     };
 
+    struct RedefinedMethodException : std::exception
+    {
+        std::string _what;
+
+        RedefinedMethodException(std::string name, Type *original_type)
+            : _what("member `" + name + "` is already defined as " + original_type->to_string())
+        { }
+
+        virtual const char *
+        what() const noexcept
+        { return _what.c_str(); }
+    };
+
 protected:
     std::string name;
     std::vector<Member> members;
@@ -315,6 +394,12 @@ public:
         inline Builder &
         addMember(std::string name, Type *type)
         {
+            for (auto &m : *product) {
+                if (m.name == name) {
+                    throw RedefinedMethodException(name, m.type);
+                }
+            }
+
             offset = (int)((offset + CYAN_PRODUCT_ALIGN - 1) % CYAN_PRODUCT_ALIGN);
             product->members.emplace_back(name, type, offset);
             return *this;
@@ -454,10 +539,14 @@ public:
 class TypePool
 {
     std::unique_ptr<VoidType> void_type;
+    std::map<std::string, std::unique_ptr<ForwardType> > forward_type;
     std::map<size_t, std::unique_ptr<SignedIntegerType> > signed_integer_type;
     std::map<size_t, std::unique_ptr<UnsignedIntegerType> > unsigned_integer_type;
     std::map<Type *, std::unique_ptr<PointerType> > pointer_type;
     std::vector<std::unique_ptr<FunctionType> > function_type;
+    std::vector<std::unique_ptr<MethodType> > method_type;
+    std::map<std::string, std::unique_ptr<ConceptType> > concept_type;
+    std::map<std::string, std::unique_ptr<StructType>> struct_type;
 public:
     class FunctionTypeBuilder
     {
@@ -490,17 +579,93 @@ public:
         friend class TypePool;
     };
 
+    class ConceptTypeBuilder
+    {
+        TypePool *owner;
+        ConceptType::Builder builder;
+        ConceptTypeBuilder(TypePool *owner, std::string name, ConceptType *base_concept)
+            : owner(owner), builder(name, base_concept)
+        { }
+
+    public:
+        ConceptTypeBuilder(ConceptTypeBuilder &&b)
+            : owner(b.owner), builder(std::move(b.builder))
+        { }
+
+        inline ConceptType *
+        get() const
+        { return builder.get(); }
+
+        inline ConceptType *
+        commit()
+        {
+            auto product = builder.release();
+            owner->concept_type.emplace(product->getName(), std::unique_ptr<ConceptType>(product));
+            return product;
+        }
+
+        inline ConceptTypeBuilder &
+        addMethod(std::string name, MethodType *prototype, Function *impl)
+        {
+            builder.addMethod(name, prototype, impl);
+            return *this;
+        }
+
+        friend class TypePool;
+    };
+
+    class StructTypeBuilder
+    {
+        TypePool *owner;
+        StructType::Builder builder;
+        StructTypeBuilder(TypePool *owner, std::string name)
+            : owner(owner), builder(name)
+        { }
+
+    public:
+        StructTypeBuilder(StructTypeBuilder &&b)
+            : owner(b.owner), builder(std::move(b.builder))
+        { }
+
+        inline StructType *
+        commit()
+        {
+            auto product = builder.release();
+            owner->struct_type.emplace(product->getName(), std::unique_ptr<StructType>(product));
+            return product;
+        }
+
+        inline StructTypeBuilder &
+        addMember(std::string name, Type *type)
+        {
+            builder.addMember(name, type);
+            return *this;
+        }
+
+        friend class TypePool;
+    };
+
     TypePool() = default;
     ~TypePool() = default;
 
     VoidType *getVoidType();
+    ForwardType *getForwardType(std::string name);
     SignedIntegerType *getSignedIntegerType(size_t bitwise_width);
     UnsignedIntegerType *getUnsignedIntegerType(size_t bitwise_width);
     PointerType *getPointerType(Type *base_type);
+    MethodType *getMethodType(ConceptType *owner, FunctionType *function);
 
     inline FunctionTypeBuilder
     getFunctionTypeBuilder()
     { return FunctionTypeBuilder(this); };
+
+    inline ConceptTypeBuilder
+    getConceptTypeBuilder(std::string name, ConceptType *base_concept)
+    { return ConceptTypeBuilder(this, name, base_concept); }
+
+    inline StructTypeBuilder
+    getStructTypeBuilder(std::string name)
+    { return StructTypeBuilder(this, name); }
 };
 
 }
