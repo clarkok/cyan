@@ -66,10 +66,30 @@ Parser::_next()
                     peaking_token = T_AND_ASSIGN;
                     _forward();
                 }
+                else {
+                    peaking_token = '&';
+                }
             }
             else {
                 _forward();
                 peaking_token = '&';
+            }
+            break;
+        }
+        else if (_current() == '=') {
+            if (!_endOfInput(1)) {
+                _forward();
+                if (_current() == '=') {
+                    peaking_token = T_EQ;
+                    _forward();
+                }
+                else {
+                    peaking_token = '=';
+                }
+            }
+            else {
+                _forward();
+                peaking_token = '=';
             }
             break;
         }
@@ -266,13 +286,16 @@ Parser::_registerReserved()
     symbol_table->defineSymbol(         \
         name, Location("<reserved>"), name, Symbol::K_RESERVED, token_value, false, nullptr)
 
+    reserved("break", R_BREAK);
     reserved("concept", R_CONCEPT);
+    reserved("continue", R_CONTINUE);
     reserved("else", R_ELSE);
     reserved("function", R_FUNCTION);
     reserved("if", R_IF);
     reserved("let", R_LET);
     reserved("return", R_RETURN);
     reserved("struct", R_STRUCT);
+    reserved("while", R_WHILE);
 
 #undef reserved
 
@@ -592,6 +615,7 @@ Parser::parseFunctionBody()
     else {
         _next();
     }
+    current_block->RetInst(type_pool->getVoidType(), nullptr);
 }
 
 void
@@ -609,6 +633,15 @@ Parser::parseStatement()
                     return;
                 case R_IF:
                     parseIfStmt();
+                    return;
+                case R_WHILE:
+                    parseWhileStmt();
+                    return;
+                case R_BREAK:
+                    parseBreakStmt();
+                    return;
+                case R_CONTINUE:
+                    parseContinueStmt();
                     return;
                 default:
                     throw ParseExpectErrorException(location, "statement", _tokenLiteral());
@@ -842,6 +875,134 @@ Parser::parseIfStmt()
     current_block = current_function->newBasicBlock();
     then_block->JumpInst(current_block->get());
     else_block->JumpInst(current_block->get());
+}
+
+void
+Parser::parseWhileStmt()
+{
+    assert(_peak() == T_ID);
+
+    auto *symbol = symbol_table->lookup(peaking_string);
+    assert(symbol);
+    assert(symbol->token_value == R_WHILE);
+    _next();
+
+    if (_peak() != '(') {
+        throw ParseExpectErrorException(
+            location,
+            "while condition",
+            _tokenLiteral()
+        );
+    }
+    _next();
+
+    auto continue_block_b = current_function->newBasicBlock();
+    auto follow_block_b = current_function->newBasicBlock();
+
+    auto continue_block = continue_block_b->get();
+    auto follow_block = follow_block_b->get();
+
+    current_block->JumpInst(continue_block);
+    current_block = std::move(continue_block_b);
+
+    parseExpression();
+    if (!last_type->is<NumericType>()) {
+        throw ParseTypeErrorException(
+            location,
+            "type " + last_type->to_string() + " cannot be used as condition"
+        );
+    }
+    auto condition_value = result_inst;
+    if (is_left_value) {
+        condition_value = current_block->LoadInst(last_type, condition_value);
+    }
+
+    auto loop_body = current_function->newBasicBlock();
+    current_block->BrInst(condition_value, loop_body->get(), follow_block);
+    current_block = std::move(loop_body);
+
+    loop_stack.emplace(continue_block, follow_block);
+
+    if (_peak() != ')') {
+        throw ParseExpectErrorException(
+            location,
+            "')'",
+            _tokenLiteral()
+        );
+    }
+    _next();
+
+    try {
+        parseStatement();
+    }
+    catch (const ParseErrorException &e) {
+        loop_stack.pop();
+        throw e;
+    }
+
+    current_block->JumpInst(continue_block);
+    current_block = std::move(follow_block_b);
+    loop_stack.pop();
+}
+
+void
+Parser::parseBreakStmt()
+{
+    assert(_peak() == T_ID);
+
+    auto *symbol = symbol_table->lookup(peaking_string);
+    assert(symbol);
+    assert(symbol->token_value == R_BREAK);
+    _next();
+
+    if (loop_stack.empty()) {
+        throw ParseErrorException(
+            location,
+            "break appear out of loop"
+        );
+    }
+
+    current_block->JumpInst(loop_stack.top().follow_block);
+    current_block = current_function->newBasicBlock();
+
+    if (_peak() != ';') {
+        throw ParseExpectErrorException(
+            location,
+            "';'",
+            _tokenLiteral()
+        );
+    }
+    _next();
+}
+
+void
+Parser::parseContinueStmt()
+{
+    assert(_peak() == T_ID);
+
+    auto *symbol = symbol_table->lookup(peaking_string);
+    assert(symbol);
+    assert(symbol->token_value == R_CONTINUE);
+    _next();
+
+    if (loop_stack.empty()) {
+        throw ParseErrorException(
+            location,
+            "break appear out of loop"
+        );
+    }
+
+    current_block->JumpInst(loop_stack.top().continue_block);
+    current_block = current_function->newBasicBlock();
+
+    if (_peak() != ';') {
+        throw ParseExpectErrorException(
+            location,
+            "';'",
+            _tokenLiteral()
+        );
+    }
+    _next();
 }
 
 void

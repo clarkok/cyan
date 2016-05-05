@@ -86,7 +86,7 @@ CallInst::to_string() const
 
 std::string
 RetInst::to_string() const
-{ return inst_header("ret") + (return_value ? return_value->getName() : ""); }
+{ return "\t" + inst_header("ret") + (return_value ? return_value->getName() : ""); }
 
 std::string
 PhiInst::to_string() const

@@ -204,3 +204,84 @@ TEST(parser_test, nested_if_test)
 
     // uut->release()->output(std::cout);
 }
+
+TEST(parser_test, while_test)
+{
+    static const char SOURCE[] =
+        "function main() {\n"
+        "    let i = 0;\n"
+        "    while (i < 10) {\n"
+        "        i = i + 1;\n"
+        "    }\n"
+        "}"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, continue_test)
+{
+    static const char SOURCE[] =
+        "function main() {\n"
+        "    let i = 0;\n"
+        "    while (i < 10) {\n"
+        "        i = i + 1;\n"
+        "        if (i < 5)\n"
+        "            continue;\n"
+        "        else\n"
+        "            i = i + 1;\n"
+        "    }\n"
+        "}"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, break_test)
+{
+    static const char SOURCE[] =
+        "function main() {\n"
+        "    let i = 0;\n"
+        "    while (i < 10) {\n"
+        "        i = i + 1;\n"
+        "        if (i < 5)\n"
+        "            break;\n"
+        "        else\n"
+        "            i = i + 1;\n"
+        "    }\n"
+        "}"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, nested_loop)
+{
+    static const char SOURCE[] =
+        "function main() {\n"
+        "    let i = 0;\n"
+        "    while (i < 10) {\n"
+        "        i = i + 1;\n"
+        "        let j = i - 1;\n"
+        "        while (1) {\n"
+        "            if (j == 0) break;\n"
+        "        }\n"
+        "        if (j == 0) continue;\n"
+        "    }\n"
+        "}"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
+}

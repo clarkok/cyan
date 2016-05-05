@@ -16,13 +16,13 @@ BasicBlock::output(std::ostream &os) const
     }
 
     if (condition) {
-        os << "\tbr\t" << condition->getName() 
+        os << "\t\t\tbr\t" << condition->getName() 
            << "\t" << then_block->getName()
            << ",\t" << else_block->getName()
            << std::endl;
     }
     else if (then_block) {
-        os << "\tj\t" << then_block->getName() << std::endl;
+        os << "\t\t\tj\t" << then_block->getName() << std::endl;
     }
 
     return os;

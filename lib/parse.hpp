@@ -7,6 +7,7 @@
 
 #include <exception>
 #include <string>
+#include <stack>
 #include <sstream>
 
 #include "location.hpp"
@@ -46,6 +47,16 @@ public:
         inline TChar *end()                 { return content + size; }
         inline const TChar *cbegin() const  { return content; }
         inline const TChar *cend()   const  { return content + size; }
+    };
+
+    struct LoopDesc
+    {
+        BasicBlock *continue_block;
+        BasicBlock *follow_block;
+
+        LoopDesc(BasicBlock *continue_block, BasicBlock *follow_block)
+            : continue_block(continue_block), follow_block(follow_block)
+        { }
     };
 
     struct ParseErrorException : std::exception
@@ -142,13 +153,16 @@ public:
 
     enum Reserved : intptr_t
     {
+        R_BREAK,
         R_CONCEPT,
+        R_CONTINUE,
         R_ELSE,
         R_FUNCTION,
         R_IF,
         R_LET,
         R_RETURN,
         R_STRUCT,
+        R_WHILE,
     };
 
 protected:
@@ -170,6 +184,7 @@ protected:
     Type *last_type = nullptr;
     bool is_left_value = false;
     Instrument *result_inst;
+    std::stack<LoopDesc> loop_stack;
 
 private:
     inline TChar
@@ -226,6 +241,9 @@ protected:
     void parseBlockStmt();
     void parseExpressionStmt();
     void parseIfStmt();
+    void parseWhileStmt();
+    void parseBreakStmt();
+    void parseContinueStmt();
 
     void parseExpression();
     void parseAssignmentExpr();
