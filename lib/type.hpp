@@ -11,6 +11,7 @@
 #include <string>
 #include <map>
 #include <exception>
+#include <limits>
 
 #include "cyan.hpp"
 
@@ -268,7 +269,14 @@ protected:
 
     ConceptType(std::string name, ConceptType *base_concept)
         : name(name), base_concept(base_concept)
-    { }
+    {
+        if (base_concept) {
+            for (auto &m : *base_concept) {
+                methods.emplace_back(m.name, m.prototype, m.impl);
+            }
+        }
+    }
+
 public:
     struct Builder
     {
@@ -303,13 +311,7 @@ public:
 
         Builder(std::string name, ConceptType *base_concept)
             : product(new ConceptType(name, base_concept))
-        {
-            if (base_concept) {
-                for (auto &m : *base_concept) {
-                    addMethod(m.name, m.prototype, m.impl);
-                }
-            }
-        }
+        { }
     };
 
     inline auto
@@ -350,7 +352,7 @@ public:
             }
             ++offset;
         }
-        return -1;
+        return std::numeric_limits<int>::max();
     }
 
     inline const Method &
@@ -494,7 +496,7 @@ public:
                 return m.offset;
             }
         }
-        return -1;
+        return std::numeric_limits<int>::max();
     }
 
     inline int
@@ -510,7 +512,7 @@ public:
             }
             ++offset;
         }
-        return -1;
+        return std::numeric_limits<int>::max();
     }
 
     virtual size_t size() const;
@@ -519,16 +521,88 @@ public:
 
 class CastedStructType : public ConceptType
 {
+public:
+    struct MethodUndefinedException : std::exception
+    {
+        std::string _what;
+
+        MethodUndefinedException(std::string name)
+            : _what("method `" + name + "` undefined")
+        { }
+
+        virtual const char *
+        what() const noexcept
+        { return _what.c_str(); }
+    };
+
+    struct MethodNotMatchedException : std::exception
+    {
+        std::string _what;
+
+        MethodNotMatchedException(
+            std::string method_name,
+            MethodType *original_prototype,
+            MethodType *prototype
+        )
+            : _what(
+                "method `" + method_name + "` with prototype " + prototype->to_string() +
+                " does not match the concept prototype " + original_prototype->to_string()
+            )
+        { }
+
+        virtual const char *
+        what() const noexcept
+        { return _what.c_str(); }
+    };
+
 protected:
     StructType *original_struct;
-    ConceptType *casted_concept;
+    int offset_base;
 
 public:
     CastedStructType(StructType *original_struct, ConceptType *casted_concept)
-        : ConceptType(casted_concept->getName(), casted_concept->getBaseConcept()),
+        : ConceptType(casted_concept->getName(), casted_concept),
           original_struct(original_struct),
-          casted_concept(casted_concept)
+          offset_base(original_struct->getConceptOffset(casted_concept->getName()))
     { }
+
+    inline void
+    implement(std::string name, MethodType *prototype, Function *impl)
+    {
+        for (auto &m : methods) {
+            if (m.name == name) {
+                if (!m.prototype->equalTo(prototype)) {
+                    throw MethodNotMatchedException(
+                        name,
+                        m.prototype,
+                        prototype
+                    );
+                }
+
+                m.impl = impl;
+                return;
+            }
+        }
+        throw MethodUndefinedException(name);
+    }
+
+    inline int
+    getMemberOffset(std::string name) const
+    {
+        int offset = original_struct->getMemberOffset(name);
+        if (offset == std::numeric_limits<int>::max()) {
+            return offset;
+        }
+        return offset - offset_base;
+    }
+
+    inline StructType *
+    getOriginalStruct() const
+    { return original_struct; }
+
+    inline const StructType::Member &
+    getMemberByOffset(int offset) const
+    { return getOriginalStruct()->getMemberByOffset(offset + offset_base); }
 };
 
 class TemplateArgumentType : public PointerType

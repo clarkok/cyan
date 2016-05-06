@@ -248,10 +248,13 @@ Parser::parse()
             else if (symbol->token_value == R_STRUCT) {
                 parseStructDefine();
             }
+            else if (symbol->token_value == R_IMPL) {
+                parseImplDefine();
+            }
             else {
                 throw ParseErrorException(
                     location,
-                    "Only concept / function / let / struct allowed to appear here"
+                    "Only concept / function / let / struct / impl allowed to appear here"
                 );
             }
         }
@@ -295,6 +298,7 @@ Parser::_registerReserved()
     reserved("else", R_ELSE);
     reserved("function", R_FUNCTION);
     reserved("if", R_IF);
+    reserved("impl", R_IMPL);
     reserved("let", R_LET);
     reserved("return", R_RETURN);
     reserved("struct", R_STRUCT);
@@ -770,7 +774,7 @@ Parser::parseStructDefine()
     assert(_peak() == T_ID);
     auto *symbol = symbol_table->lookup(peaking_string);
     assert(symbol);
-    assert(symbol->token_value = R_CONCEPT);
+    assert(symbol->token_value == R_STRUCT);
 
     if (_next() != T_ID) {
         throw ParseExpectErrorException(location, "struct name", _tokenLiteral());
@@ -857,6 +861,159 @@ Parser::parseStructDefine()
         );
     }
     _next();
+}
+
+void
+Parser::parseImplDefine()
+{
+    assert(_peak() == T_ID);
+    auto *symbol = symbol_table->lookup(peaking_string);
+    assert(symbol);
+    assert(symbol->token_value == R_IMPL);
+
+    if (_next() != T_ID) {
+        throw ParseExpectErrorException(location, "struct name", _tokenLiteral());
+    }
+    Type *type = checkTypeName(peaking_string);
+    if (!type->is<StructType>()) {
+        throw ParseTypeErrorException(
+            location,
+            "`" + peaking_string + "` is not a struct name"
+        );
+    }
+    auto struct_type = type->to<StructType>();
+
+    if (_next() != ':') {
+        throw ParseExpectErrorException(location, "concept", _tokenLiteral());
+    }
+
+    if (_next() != T_ID) {
+        throw ParseExpectErrorException(location, "concept name", _tokenLiteral());
+    }
+    Type *concept_type_base = checkTypeName(peaking_string);
+    if (!concept_type_base->is<ConceptType>()) {
+        throw ParseTypeErrorException(
+            location,
+            "`" + peaking_string + "` is not a concept"
+        );
+    }
+    auto concept_type = concept_type_base->to<ConceptType>();
+    struct_type->implementConcept(concept_type);
+
+    auto casted_struct_type = type_pool->getCastedStructType(struct_type, concept_type);
+    if (_next() != '{') {
+        throw ParseExpectErrorException(
+            location,
+            "impl body",
+            _tokenLiteral()
+        );
+    }
+    _next();
+
+    while (_peak() != T_EOF && _peak() != '}') {
+        symbol = symbol_table->lookup(peaking_string);
+        if (
+            _peak() != T_ID ||
+            !symbol ||
+            symbol->klass != Symbol::K_RESERVED ||
+            symbol->token_value != R_FUNCTION
+            ) {
+            throw ParseExpectErrorException(
+                location,
+                "impl methods",
+                _tokenLiteral()
+            );
+        }
+
+        if (_next() != T_ID) {
+            throw ParseExpectErrorException(
+                location,
+                "impl method name",
+                _tokenLiteral()
+            );
+        }
+        auto method_name = peaking_string;
+        _next();
+
+        symbol_table->pushScope();
+
+        try {
+            parsePrototype();
+            MethodType *prototype = type_pool->getMethodType(
+                casted_struct_type,
+                last_type->to<FunctionType>()
+            );
+
+            if (_peak() != '{') {
+                throw ParseExpectErrorException(
+                    location,
+                    "method body",
+                    _tokenLiteral()
+                );
+            }
+
+            symbol_table->defineSymbol(
+                "this",
+                location,
+                "this",
+                Symbol::K_ARGUMENT,
+                prototype->arguments_size(),
+                false,
+                casted_struct_type
+            );
+
+            current_function = ir_builder->newFunction(
+                concept_type->getName() + "$" + struct_type->getName() + "::" + method_name,
+                last_type->to<FunctionType>()
+            );
+            current_block = current_function->newBasicBlock("entry");
+            try {
+                casted_struct_type->implement(method_name, prototype, current_function->get());
+            }
+            catch (const std::exception &e) {
+                throw ParseErrorException(
+                    location,
+                    e.what()
+                );
+            }
+            parseFunctionBody();
+        }
+        catch (const ParseErrorException &e) {
+            symbol_table->popScope();
+            error_collector->error(e);
+            while (_peak() != T_EOF && _peak() != '}') {
+                if (_peak() == T_ID) {
+                    symbol = symbol_table->lookup(peaking_string);
+                    if (
+                        symbol &&
+                        symbol->klass == Symbol::K_RESERVED &&
+                        symbol->token_value == R_FUNCTION
+                    ) {
+                        break;
+                    }
+                }
+                _next();
+            }
+            continue;
+        }
+        symbol_table->popScope();
+    }
+    if (_peak() == T_EOF) {
+        throw ParseErrorException(
+            location,
+            "unexpected EOF"
+        );
+    }
+    _next();
+
+    for (auto &m : *casted_struct_type) {
+        if (!m.impl) {
+            throw ParseErrorException(
+                location,
+                "method `" + m.name + "` not implemented"
+            );
+        }
+    }
 }
 
 void
@@ -2392,10 +2549,10 @@ Parser::parsePostfixExpr()
             if (last_type->is<StructType>()) {
                 auto struct_type = last_type->to<StructType>();
                 int offset = struct_type->getMemberOffset(member_name);
-                if (offset == -1) {
+                if (offset == std::numeric_limits<int>::max()) {
                     offset = struct_type->getConceptOffset(member_name);
 
-                    if (offset == -1) {
+                    if (offset == std::numeric_limits<int>::max()) {
                         throw ParseErrorException(
                             location,
                             "struct " + struct_type->getName() + 
@@ -2432,15 +2589,53 @@ Parser::parsePostfixExpr()
                 }
             }
             else if (last_type->is<CastedStructType>()) {
+                auto casted_struct_type = last_type->to<CastedStructType>();
+                int offset = casted_struct_type->getMemberOffset(member_name);
+                if (offset == std::numeric_limits<int>::max()) {
+                    offset = casted_struct_type->getMethodOffset(member_name);
+
+                    if (offset == std::numeric_limits<int>::max()) {
+                        throw ParseErrorException(
+                            location,
+                            "struct " + casted_struct_type->getOriginalStruct()->getName() +
+                            " does not have member `" + member_name + "`"
+                        );
+                    }
+
+                    auto method = casted_struct_type->getMethodByOffset(offset);
+                    last_type = method.prototype;
+                    is_left_value = true;
+                    result_inst = current_block->AddInst(
+                        type_pool->getPointerType(last_type),
+                        result_inst,
+                        current_block->SignedImmInst(
+                            type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                            offset
+                        )
+                    );
+                }
+                else {
+                    auto member = casted_struct_type->getMemberByOffset(offset);
+                    last_type = member.type;
+                    is_left_value = true;
+                    result_inst = current_block->AddInst(
+                        type_pool->getPointerType(last_type),
+                        result_inst,
+                        current_block->SignedImmInst(
+                            type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                            offset
+                        )
+                    );
+                }
             }
             else {
                 auto concept_type = last_type->to<ConceptType>();
                 int offset = concept_type->getMethodOffset(member_name);
-                if (offset == -1) {
+                if (offset == std::numeric_limits<int>::max()) {
                     throw ParseErrorException(
                         location,
                         "concept " + concept_type->getName() +
-                        " dees not have method `" + member_name + "`"
+                        " does not have method `" + member_name + "`"
                     );
                 }
 

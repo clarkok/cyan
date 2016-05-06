@@ -159,6 +159,7 @@ public:
         R_ELSE,
         R_FUNCTION,
         R_IF,
+        R_IMPL,
         R_LET,
         R_RETURN,
         R_STRUCT,
@@ -236,6 +237,7 @@ protected:
     void parseFunctionDefine();
     void parseConceptDefine();
     void parseStructDefine();
+    void parseImplDefine();
 
     void parsePrototype();
     void parseFunctionBody();
@@ -293,9 +295,9 @@ public:
 
     bool parse();
 
-    inline IR *
+    inline std::unique_ptr<IR>
     release()
-    { return ir_builder->release(); }
+    { return std::unique_ptr<IR>(ir_builder->release()); }
 };
 
 }

@@ -388,5 +388,30 @@ TEST(parser_test, method_call_test)
     Parser *uut = new Parser(SOURCE);
     ASSERT_TRUE(uut->parse());
 
+    // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, impl_test)
+{
+    static const char SOURCE[] =
+        "concept Person {\n"
+        "    function getID() : u32;\n"
+        "}\n"
+        "struct Student {\n"
+        "    id : u32\n"
+        "}\n"
+        "impl Student : Person {\n"
+        "    function getID() : u32 {\n"
+        "        return this.id;\n"
+        "    }\n"
+        "}\n"
+        "function main(st : Person) : u32 {\n"
+        "    return st.getID();\n"
+        "}\n"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
     uut->release()->output(std::cout);
 }
