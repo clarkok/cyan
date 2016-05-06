@@ -413,5 +413,25 @@ TEST(parser_test, impl_test)
     Parser *uut = new Parser(SOURCE);
     ASSERT_TRUE(uut->parse());
 
+    // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, left_value_argument_test)
+{
+    static const char SOURCE[] =
+        "function swap(a : &i32, b : &i32) {\n"
+        "    let t = a;\n"
+        "    a = b;\n"
+        "    b = t;\n"
+        "}\n"
+        "function main() {\n"
+        "    let a = 1, b = 2;\n"
+        "    swap(a, b);\n"
+        "}\n"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
     uut->release()->output(std::cout);
 }
