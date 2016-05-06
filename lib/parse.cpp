@@ -433,7 +433,7 @@ Parser::checkTypeName(std::string name)
     if (!symbol) {
         throw ParseUndefinedErrorException(
             location,
-            "type `" + name + "`"
+            name
         );
     }
 
@@ -450,6 +450,22 @@ Parser::checkTypeName(std::string name)
     }
 
     return symbol->type;
+}
+
+Type *
+Parser::resolveForwardType(Type *type)
+{
+    while (type->is<ForwardType>()) {
+        auto name = type->to<ForwardType>()->getName();
+        try { type = checkTypeName(name); }
+        catch (const ParseErrorException &e) {
+            throw ParseTypeErrorException(
+                location,
+                "forward type " + name + " is not defined"
+            );
+        }
+    }
+    return type;
 }
 
 void
@@ -762,19 +778,20 @@ Parser::parseStructDefine()
     auto struct_name = peaking_string;
     auto *forward_decl = checkStructDefined(struct_name);
 
+    if (!forward_decl) {
+        forward_decl = symbol_table->defineSymbol(
+            struct_name,
+            location,
+            struct_name,
+            Symbol::K_STRUCT,
+            0,
+            false,
+            type_pool->getForwardType(struct_name)
+        );
+    }
+
     if (_next() == ';') {
         _next();
-        if (!forward_decl) {
-            symbol_table->defineSymbol(
-                struct_name,
-                location,
-                struct_name,
-                Symbol::K_STRUCT,
-                0,
-                false,
-                type_pool->getForwardType(struct_name)
-            );
-        }
         return;
     }
 
@@ -831,15 +848,7 @@ Parser::parseStructDefine()
         _next();
     }
 
-    symbol_table->defineSymbol(
-        struct_name,
-        location,
-        struct_name,
-        Symbol::K_STRUCT,
-        0,
-        false,
-        builder.commit()
-    );
+    forward_decl->type = builder.commit();
 
     if (_peak() == T_EOF) {
         throw ParseErrorException(
@@ -883,7 +892,15 @@ Parser::parsePrototype()
         }
 
         Type *argument_type = checkTypeName(peaking_string);
-        if (use_left_value) { argument_type = type_pool->getPointerType(argument_type); }
+        if (use_left_value) {
+            if (argument_type->is<ConceptType>()) {
+                throw ParseTypeErrorException(
+                    location,
+                    "concept argument cannot be left value"
+                );
+            }
+            argument_type = type_pool->getPointerType(argument_type);
+        }
 
         symbol_table->defineSymbol(
             argument_name,
@@ -2211,6 +2228,76 @@ Parser::parsePostfixExpr()
             );
             current_block->StoreInst(last_type, original_address, decreased_value);
             result_inst = original_value;
+        }
+        else if (_peak() == '.') {
+            last_type = resolveForwardType(last_type);
+
+            if (!last_type->is<StructType>() && !last_type->is<ConceptType>()) {
+                throw ParseTypeErrorException(
+                    location,
+                    "type " + last_type->to_string() + " cannot have members"
+                );
+            }
+            if (_next() != T_ID) {
+                throw ParseExpectErrorException(
+                    location,
+                    "member name",
+                    _tokenLiteral()
+                );
+            }
+            auto member_name = peaking_string;
+            _next();
+
+            if (is_left_value) {
+                result_inst = current_block->LoadInst(last_type, result_inst);
+            }
+
+            if (last_type->is<StructType>()) {
+                auto struct_type = last_type->to<StructType>();
+                int offset = struct_type->getMemberOffset(member_name);
+                if (offset == -1) {
+                    offset = struct_type->getConceptOffset(member_name);
+
+                    if (offset == -1) {
+                        throw ParseErrorException(
+                            location,
+                            "struct " + struct_type->getName() + 
+                            " does not have member `" + member_name + "`"
+                        );
+                    }
+                    else {
+                        last_type = type_pool->getCastedStructType(
+                            struct_type,
+                            struct_type->getConceptByOffset(offset)
+                        );
+                        result_inst = current_block->AddInst(
+                            last_type,
+                            result_inst,
+                            current_block->SignedImmInst(
+                                type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                                offset
+                            )
+                        );
+                        is_left_value = false;
+                    }
+                }
+                else {
+                    auto member = struct_type->getMemberByOffset(offset);
+                    last_type = member.type;
+                    is_left_value = true;
+                    result_inst = current_block->AddInst(
+                        type_pool->getPointerType(last_type),
+                        result_inst,
+                        current_block->SignedImmInst(
+                            type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                            offset
+                        )
+                    );
+                }
+            }
+            else {
+                assert(false);
+            }
         }
         else {
             break;

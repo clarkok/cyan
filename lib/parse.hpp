@@ -230,6 +230,7 @@ protected:
     Symbol *checkConceptDefined(std::string name);
     Symbol *checkStructDefined(std::string name);
     Type *checkTypeName(std::string name);
+    Type *resolveForwardType(Type *type);
 
     void parseGlobalLetStmt();
     void parseFunctionDefine();

@@ -318,3 +318,39 @@ TEST(parser_test, struct_test)
 
     // uut->release()->output(std::cout);
 }
+
+TEST(parser_test, struct_member_test)
+{
+    static const char SOURCE[] = 
+        "struct Student {\n"
+        "    id : i32,\n"
+        "    age : i32\n"
+        "}\n"
+        "function main(st : Student) : i32 {\n"
+        "    return st.id;\n"
+        "}\n"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, struct_member_struct_test)
+{
+    static const char SOURCE[] = 
+        "struct LinkedList {\n"
+        "    next : LinkedList,\n"
+        "    value : i32\n"
+        "}\n"
+        "function main(list : LinkedList) : i32 {\n"
+        "    return list.next.next.value;\n"
+        "}\n"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
+}

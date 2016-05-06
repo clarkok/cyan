@@ -336,6 +336,10 @@ public:
     getName() const
     { return name; }
 
+    inline ConceptType *
+    getBaseConcept() const
+    { return base_concept; }
+
     virtual size_t size() const;
     virtual std::string to_string() const;
 };
@@ -400,8 +404,7 @@ public:
                 }
             }
 
-            offset = (int)((offset + CYAN_PRODUCT_ALIGN - 1) % CYAN_PRODUCT_ALIGN);
-            product->members.emplace_back(name, type, offset);
+            product->members.emplace_back(name, type, offset++);
             return *this;
         }
     };
@@ -426,6 +429,14 @@ public:
     members_size() const -> decltype(members.size())
     { return members.size(); }
 
+    inline const Member &
+    getMemberByOffset(int offset) const
+    { return members[offset]; }
+
+    inline ConceptType *
+    getConceptByOffset(int offset) const
+    { return concepts[offset - members_size()]; }
+
     inline void
     implementConcept(ConceptType *concept)
     { concepts.push_back(concept); }
@@ -433,7 +444,12 @@ public:
     inline bool
     implementedConcept(ConceptType *concept)
     {
-        for(auto c : concepts) { if (c == concept) { return true; } }
+        for(auto c : concepts) {
+            while (c) {
+                if (c->equalTo(concept)) { return true; }
+                c = c->getBaseConcept();
+            }
+        }
         return false;
     }
 
@@ -441,8 +457,49 @@ public:
     getName() const
     { return name; }
 
+    inline int
+    getMemberOffset(std::string name) const
+    {
+        for (auto &m : members) {
+            if (m.name == name) {
+                return m.offset;
+            }
+        }
+        return -1;
+    }
+
+    inline int
+    getConceptOffset(std::string name) const
+    {
+        int offset = members_size();
+        for (auto c : concepts) {
+            while (c) {
+                if (c->getName() == name) {
+                    return offset;
+                }
+                c = c->getBaseConcept();
+            }
+            ++offset;
+        }
+        return -1;
+    }
+
     virtual size_t size() const;
     virtual std::string to_string() const;
+};
+
+class CastedStructType : public ConceptType
+{
+protected:
+    StructType *original_struct;
+    ConceptType *casted_concept;
+
+public:
+    CastedStructType(StructType *original_struct, ConceptType *casted_concept)
+        : ConceptType(casted_concept->getName(), casted_concept->getBaseConcept()),
+          original_struct(original_struct),
+          casted_concept(casted_concept)
+    { }
 };
 
 class TemplateArgumentType : public PointerType
@@ -546,7 +603,8 @@ class TypePool
     std::vector<std::unique_ptr<FunctionType> > function_type;
     std::vector<std::unique_ptr<MethodType> > method_type;
     std::map<std::string, std::unique_ptr<ConceptType> > concept_type;
-    std::map<std::string, std::unique_ptr<StructType>> struct_type;
+    std::map<std::string, std::unique_ptr<StructType> > struct_type;
+    std::map<std::pair<StructType *, ConceptType *>, std::unique_ptr<CastedStructType> > casted_struct_type;
 public:
     class FunctionTypeBuilder
     {
@@ -654,6 +712,7 @@ public:
     UnsignedIntegerType *getUnsignedIntegerType(size_t bitwise_width);
     PointerType *getPointerType(Type *base_type);
     MethodType *getMethodType(ConceptType *owner, FunctionType *function);
+    CastedStructType *getCastedStructType(StructType *original_struct, ConceptType *concept);
 
     inline FunctionTypeBuilder
     getFunctionTypeBuilder()

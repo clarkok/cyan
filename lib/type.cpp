@@ -301,3 +301,16 @@ TypePool::getMethodType(ConceptType *owner, FunctionType *function)
     method_type.emplace_back(std::unique_ptr<MethodType>(MethodType::fromFunction(owner, function)));
     return method_type.back().get();
 }
+
+CastedStructType *
+TypePool::getCastedStructType(StructType *original_struct, ConceptType *concept)
+{
+    CastedStructType *ret = new CastedStructType(original_struct, concept);
+
+    casted_struct_type.emplace(
+        std::pair<StructType *, ConceptType *>(original_struct, concept),
+        std::unique_ptr<CastedStructType>(ret)
+    );
+
+    return ret;
+}
