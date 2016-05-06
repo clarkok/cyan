@@ -107,6 +107,10 @@ public:
         newPhiBuilder(Type *type, std::string name = "")
         { return PhiBuilder(this, type, tempName(name)); }
 
+        inline CallBuilder
+        newCallBuilder(Type *type, Instrument *function, std::string name = "")
+        { return CallBuilder(this, type, function, tempName(name)); }
+
         virtual Instrument *SignedImmInst(SignedIntegerType *type, intptr_t value, std::string name = "");
         virtual Instrument *UnsignedImmInst(UnsignedIntegerType *type, uintptr_t value, std::string name = "");
         virtual Instrument *GlobalInst(PointerType *type, std::string value, std::string name = "");

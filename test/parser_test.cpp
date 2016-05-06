@@ -354,3 +354,39 @@ TEST(parser_test, struct_member_struct_test)
 
     // uut->release()->output(std::cout);
 }
+
+TEST(parser_test, function_call_test)
+{
+    static const char SOURCE[] =
+        "function test(a : i32, b : i32) : i32{\n"
+        "    if (a > b) return a;\n"
+        "    else return b;\n"
+        "}\n"
+        "function main() {\n"
+        "    test(1, 2);\n"
+        "    main();\n"
+        "}\n"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, method_call_test)
+{
+    static const char SOURCE[] =
+        "concept Person {\n"
+        "    function getID() : u32;\n"
+        "}\n"
+        "function main(st : Person) : u32 {\n"
+        "    return st.getID();\n"
+        "}\n"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    uut->release()->output(std::cout);
+}

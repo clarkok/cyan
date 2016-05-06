@@ -340,6 +340,35 @@ public:
     getBaseConcept() const
     { return base_concept; }
 
+    inline int
+    getMethodOffset(std::string name) const
+    {
+        int offset = 0;
+        for (auto &m : methods) {
+            if (m.name == name) {
+                return offset;
+            }
+            ++offset;
+        }
+        return -1;
+    }
+
+    inline const Method &
+    getMethodByOffset(int offset) const
+    { return methods[offset]; }
+
+    inline bool
+    isInheritedFrom(ConceptType *base) const
+    {
+        if (equalTo(base)) {
+            return true;
+        }
+        if (getBaseConcept()) {
+            return getBaseConcept()->isInheritedFrom(base);
+        }
+        return false;
+    }
+
     virtual size_t size() const;
     virtual std::string to_string() const;
 };
@@ -471,7 +500,7 @@ public:
     inline int
     getConceptOffset(std::string name) const
     {
-        int offset = members_size();
+        int offset = static_cast<int>(members_size());
         for (auto c : concepts) {
             while (c) {
                 if (c->getName() == name) {

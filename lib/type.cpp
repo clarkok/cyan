@@ -181,10 +181,12 @@ std::string
 FunctionType::to_string() const
 {
     std::string ret("(");
-    for (auto &arg : arguments) {
-        ret += arg->to_string() + ",";
+    if (arguments.size()) {
+        for (auto &arg : arguments) {
+            ret += arg->to_string() + ",";
+        }
+        ret.pop_back();
     }
-    ret.pop_back();
     ret += "):" + return_type->to_string();
     return ret;
 }
@@ -200,7 +202,7 @@ MethodType::fromFunction(Type *owner, FunctionType *function)
 
 std::string
 MethodType::to_string() const
-{ return owner->to_string() + ".(" + dynamic_cast<const FunctionType*>(this)->to_string() + ")"; }
+{ return owner->to_string() + "::" + FunctionType::to_string() + ""; }
 
 size_t
 ConceptType::size() const

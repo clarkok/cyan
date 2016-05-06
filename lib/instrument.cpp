@@ -73,13 +73,14 @@ std::string
 CallInst::to_string() const
 {
     std::string ret(value_header("call") + function->getName() + "(");
+    if (arguments.size()) {
+        for (auto iter = cbegin(); iter != cend(); ++iter) {
+            ret += (*iter)->getName() + ", ";
+        }
 
-    for (auto iter = cbegin(); iter != cend(); ++iter) {
-        ret += (*iter)->getName() + ", ";
+        ret.pop_back();
+        ret.pop_back();
     }
-
-    ret.pop_back();
-    ret.pop_back();
     ret += ")";
     return ret;
 }

@@ -224,14 +224,6 @@ IRBuilder::BlockBuilder::BrInst(Instrument *condition, BasicBlock *then_block, B
 }
 
 Instrument *
-IRBuilder::BlockBuilder::CallInst(class CallInst *inst)
-{
-    assert(!productEnded());
-    product->inst_list.emplace_back(inst);
-    return inst;
-}
-
-Instrument *
 IRBuilder::BlockBuilder::PhiInst(class PhiInst *inst)
 {
     assert(!productEnded());
@@ -242,6 +234,18 @@ IRBuilder::BlockBuilder::PhiInst(class PhiInst *inst)
 Instrument *
 IRBuilder::BlockBuilder::PhiBuilder::commit()
 { return owner->PhiInst(builder.release()); }
+
+Instrument *
+IRBuilder::BlockBuilder::CallInst(class CallInst *inst)
+{
+    assert(!productEnded());
+    product->inst_list.emplace_back(inst);
+    return inst;
+}
+
+Instrument *
+IRBuilder::BlockBuilder::CallBuilder::commit()
+{ return owner->CallInst(builder.release()); }
 
 std::unique_ptr<IRBuilder::BlockBuilder>
 IRBuilder::FunctionBuilder::newBasicBlock(std::string name)

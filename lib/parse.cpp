@@ -7,6 +7,7 @@
 #include <cassert>
 
 #include "parse.hpp"
+#include "type.hpp"
 
 using namespace cyan;
 
@@ -540,9 +541,8 @@ Parser::parseFunctionDefine()
     }
     auto forward_symbol = checkFunctionDefined(function_name, dynamic_cast<FunctionType*>(last_type));
 
-    if (_peak() == ';') {
-        _next();
-        symbol_table->defineSymbolInRoot(
+    if (!forward_symbol) {
+        forward_symbol = symbol_table->defineSymbolInRoot(
             function_name,
             location,
             function_name,
@@ -551,6 +551,10 @@ Parser::parseFunctionDefine()
             false,
             last_type
         );
+    }
+
+    if (_peak() == ';') {
+        _next();
         return;
     }
     else if (_peak() != '{') {
@@ -559,20 +563,7 @@ Parser::parseFunctionDefine()
 
     current_function = ir_builder->newFunction(function_name, last_type->to<FunctionType>());
     current_block = current_function->newBasicBlock("entry");
-    if (forward_symbol) {
-        forward_symbol->token_value = reinterpret_cast<intptr_t>(current_function->get());
-    }
-    else {
-        symbol_table->defineSymbolInRoot(
-            function_name,
-            location,
-            function_name,
-            Symbol::K_FUNCTION,
-            reinterpret_cast<intptr_t>(current_function->get()),
-            false,
-            last_type
-        );
-    }
+    forward_symbol->token_value = reinterpret_cast<intptr_t>(current_function->get());
 
     try { parseFunctionBody(); }
     catch (const ParseErrorException &e) {
@@ -715,6 +706,15 @@ Parser::parseConceptDefine()
                         location,
                         "';'",
                         _tokenLiteral()
+                    );
+                }
+                try {
+                    builder.addMethod(method_name, prototype, nullptr);
+                }
+                catch (const std::exception &e) {
+                    throw ParseErrorException(
+                        location,
+                        e.what()
                     );
                 }
                 _next();
@@ -2172,6 +2172,8 @@ Parser::parsePostfixExpr()
 {
     parseUnaryExpr();
 
+    Instrument *this_value = nullptr;
+
     while (true) {
         if (_peak() == T_INC) {
             if (!last_type->is<NumericType>()) {
@@ -2229,6 +2231,140 @@ Parser::parsePostfixExpr()
             current_block->StoreInst(last_type, original_address, decreased_value);
             result_inst = original_value;
         }
+        else if (_peak() == '(') {
+            _next();
+            if (!last_type->is<FunctionType>()) {
+                throw ParseTypeErrorException(
+                    location,
+                    "type " + last_type->to_string() + " is not callable"
+                );
+            }
+
+            auto function_type = last_type->to<FunctionType>();
+
+            if (is_left_value) {
+                result_inst = current_block->LoadInst(last_type, result_inst);
+            }
+
+            auto builder = current_block->newCallBuilder(
+                function_type->getReturnType(),
+                result_inst
+            );
+            auto iter = function_type->begin();
+
+            while (_peak() != T_EOF && _peak() != ')') {
+                parseExpression();
+                if (iter == function_type->end()) {
+                    throw ParseTypeErrorException(
+                        location,
+                        "function requires only " + 
+                        std::to_string(function_type->arguments_size()) + " arguments"
+                    );
+                }
+                Type *required_type = *iter++;
+                bool use_left_value = required_type->is<PointerType>();
+
+                if (use_left_value) {
+                    required_type = required_type->to<PointerType>()->getBaseType();
+                }
+
+                if (
+                    (required_type->is<NumericType>() && last_type->is<NumericType>()) ||
+                    required_type->equalTo(last_type)
+                ) {
+                    if (use_left_value && is_left_value) {
+                        builder.addArgument(result_inst);
+                    }
+                    else if (use_left_value && !is_left_value) {
+                        throw ParseTypeErrorException(
+                            location,
+                            "function requires left value"
+                        );
+                    }
+                    else {
+                        if (is_left_value) {
+                            result_inst = current_block->LoadInst(last_type, result_inst);
+                        }
+                        builder.addArgument(result_inst);
+                    }
+                }
+                else if (
+                    required_type->is<ConceptType>() &&
+                    last_type->is<StructType>() &&
+                    last_type->to<StructType>()->implementedConcept(
+                        required_type->to<ConceptType>()
+                    )
+                ) {
+                    auto struct_type = last_type->to<StructType>();
+                    auto concept_type = required_type->to<ConceptType>();
+                    auto offset = struct_type->getConceptOffset(concept_type->getName());
+                    if (is_left_value) {
+                        result_inst = current_block->LoadInst(last_type, result_inst);
+                    }
+                    result_inst = current_block->AddInst(
+                        type_pool->getCastedStructType(struct_type, concept_type),
+                        result_inst,
+                        current_block->SignedImmInst(
+                            type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                            offset
+                        )
+                    );
+                    builder.addArgument(result_inst);
+                }
+                else if (
+                    required_type->is<ConceptType>() &&
+                    last_type->is<ConceptType>() &&
+                    last_type->to<ConceptType>()->isInheritedFrom(
+                        required_type->to<ConceptType>()
+                    )
+                ) {
+                    if (is_left_value) {
+                        result_inst = current_block->LoadInst(last_type, result_inst);
+                    }
+                    builder.addArgument(result_inst);
+                }
+                else {
+                    throw ParseTypeErrorException(
+                        location,
+                        "function requires type " + required_type->to_string() + 
+                        ", but type " + last_type->to_string() + " met"
+                    );
+                }
+                if (_peak() == ')') {
+                    break;
+                }
+                else if (_peak() != ',') {
+                    throw ParseExpectErrorException(
+                        location,
+                        "','",
+                        _tokenLiteral()
+                    );
+                }
+                _next();
+            }
+            if (iter != function_type->end()) {
+                throw ParseTypeErrorException(
+                    location,
+                    "function requires " + std::to_string(function_type->arguments_size()) +
+                    " arguments"
+                );
+            }
+            if (this_value) {
+                builder.addArgument(this_value);
+                this_value = nullptr;
+            }
+            if (_peak() == T_EOF) {
+                throw ParseErrorException(
+                    location,
+                    "unexpected EOF"
+                );
+            }
+            _next();
+
+            is_left_value = false;
+            last_type = function_type->getReturnType();
+            result_inst = builder.commit();
+        }
         else if (_peak() == '.') {
             last_type = resolveForwardType(last_type);
 
@@ -2251,6 +2387,7 @@ Parser::parsePostfixExpr()
             if (is_left_value) {
                 result_inst = current_block->LoadInst(last_type, result_inst);
             }
+            this_value = result_inst;
 
             if (last_type->is<StructType>()) {
                 auto struct_type = last_type->to<StructType>();
@@ -2265,21 +2402,20 @@ Parser::parsePostfixExpr()
                             " does not have member `" + member_name + "`"
                         );
                     }
-                    else {
-                        last_type = type_pool->getCastedStructType(
-                            struct_type,
-                            struct_type->getConceptByOffset(offset)
-                        );
-                        result_inst = current_block->AddInst(
-                            last_type,
-                            result_inst,
-                            current_block->SignedImmInst(
-                                type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
-                                offset
-                            )
-                        );
-                        is_left_value = false;
-                    }
+
+                    last_type = type_pool->getCastedStructType(
+                        struct_type,
+                        struct_type->getConceptByOffset(offset)
+                    );
+                    result_inst = current_block->AddInst(
+                        last_type,
+                        result_inst,
+                        current_block->SignedImmInst(
+                            type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                            offset
+                        )
+                    );
+                    is_left_value = false;
                 }
                 else {
                     auto member = struct_type->getMemberByOffset(offset);
@@ -2295,8 +2431,30 @@ Parser::parsePostfixExpr()
                     );
                 }
             }
+            else if (last_type->is<CastedStructType>()) {
+            }
             else {
-                assert(false);
+                auto concept_type = last_type->to<ConceptType>();
+                int offset = concept_type->getMethodOffset(member_name);
+                if (offset == -1) {
+                    throw ParseErrorException(
+                        location,
+                        "concept " + concept_type->getName() +
+                        " dees not have method `" + member_name + "`"
+                    );
+                }
+
+                auto method = concept_type->getMethodByOffset(offset);
+                last_type = method.prototype;
+                is_left_value = true;
+                result_inst = current_block->AddInst(
+                    type_pool->getPointerType(last_type),
+                    result_inst,
+                    current_block->SignedImmInst(
+                        type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                        offset
+                    )
+                );
             }
         }
         else {
@@ -2344,6 +2502,13 @@ Parser::parseUnaryExpr()
             }
             else if (symbol->klass == Symbol::K_VARIABLE) {
                 result_inst = reinterpret_cast<Instrument *>(symbol->token_value);
+            }
+            else if (symbol->klass == Symbol::K_FUNCTION) {
+                result_inst = current_block->GlobalInst(
+                    last_type->to<FunctionType>(),
+                    variable_name
+                );
+                is_left_value = false;
             }
             else {
                 throw ParseExpectErrorException(location, "variable", _tokenLiteral());
