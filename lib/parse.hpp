@@ -231,6 +231,8 @@ protected:
     Symbol *checkConceptDefined(std::string name);
     Symbol *checkStructDefined(std::string name);
     Type *checkTypeName(std::string name);
+    Type *parseTypeName(TemplateType *template_scope = nullptr);
+    Type *expandTemplate(TemplateType *template_type, const std::vector<Type *> &arguments);
     Type *resolveForwardType(Type *type);
 
     void parseGlobalLetStmt();
@@ -279,7 +281,7 @@ public:
           peaking_string(""),
           symbol_table(new SymbolTable()),
           type_pool(new TypePool()),
-          error_counter(new LimitErrorCollector(10)),
+          error_counter(new LimitErrorCollector(ERROR_NR_LIMIT)),
           error_collector(
               dynamic_cast<ErrorCollector*>(
                   ChainErrorCollector::Builder()

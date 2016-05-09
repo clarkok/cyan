@@ -220,9 +220,13 @@ std::string
 StructType::to_string() const
 { return "struct " + getName(); }
 
+size_t
+TemplateArgumentType::size() const
+{ return 0; }
+
 std::string
 TemplateArgumentType::to_string() const
-{ return "(" + getName() + ":" + base_type->to_string() + ")"; }
+{ return "(" + getName() + ":" + concept->getName() + ")"; }
 
 size_t
 TemplateType::size() const

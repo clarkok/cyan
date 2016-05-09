@@ -605,23 +605,25 @@ public:
     { return getOriginalStruct()->getMemberByOffset(offset + offset_base); }
 };
 
-class TemplateArgumentType : public PointerType
+class TemplateArgumentType : public Type
 {
+    ConceptType *concept;
     class TemplateType *scope;
     std::string name;
 public:
     TemplateArgumentType(ConceptType *concept, class TemplateType *scope, std::string name)
-        : PointerType(concept), scope(scope), name(name)
+        : concept(concept), scope(scope), name(name)
     { }
 
     inline class TemplateType *
     getScope() const
     { return scope; }
 
-    inline std::string
-    getName() const
-    { return name; }
+    inline ConceptType *
+    getConcept() const
+    { return concept; }
 
+    virtual size_t size() const;
     virtual std::string to_string() const;
 };
 
@@ -642,8 +644,8 @@ protected:
     Type *base_type;
     std::vector<Argument> arguments;
 
-    TemplateType(Type *base_type)
-        : base_type(base_type)
+    TemplateType()
+        : base_type(nullptr)
     { }
 
 public:
@@ -653,13 +655,24 @@ public:
         std::unique_ptr<TemplateType> product;
 
     public:
-        Builder(Type *base_type)
-            : product(new TemplateType(base_type))
+        Builder()
+            : product(new TemplateType())
+        { }
+
+        Builder(Builder &&b)
+            : product(std::move(b.product))
         { }
 
         inline TemplateType *
-        release()
-        { return product.release(); }
+        release(Type *base_type)
+        {
+            product->base_type = base_type;
+            return product.release();
+        }
+
+        inline TemplateType *
+        get() const
+        { return product.get(); }
 
         inline Builder &
         addArgument(std::string name, ConceptType *concept)
@@ -688,12 +701,58 @@ public:
     cend() const -> decltype(arguments.cend())
     { return arguments.cend(); }
 
+    inline size_t
+    arguments_size() const
+    { return arguments.size(); }
+
     inline Type *
     getBaseType()
     { return base_type; }
 
+    inline TemplateArgumentType *
+    findTemplateArgument(std::string name) const
+    {
+        for (auto &arg : arguments) {
+            if (arg.name == name) {
+                return arg.type.get();
+            }
+        }
+        return nullptr;
+    }
+
     virtual size_t size() const;
     virtual std::string to_string() const;
+};
+
+class TemplateExpandingType : public ConceptType
+{
+protected:
+    std::vector<Type *> arguments;
+
+public:
+    TemplateExpandingType(ConceptType *concept, const std::vector<Type *> arguments)
+        : ConceptType(concept->getName(), concept), arguments(arguments)
+    { }
+
+    inline auto
+    begin() -> decltype(arguments.begin())
+    { return arguments.begin(); }
+
+    inline auto
+    end() -> decltype(arguments.end())
+    { return arguments.end(); }
+
+    inline auto
+    cbegin() const -> decltype(arguments.cbegin())
+    { return arguments.cbegin(); }
+
+    inline auto
+    cend() const -> decltype(arguments.cend())
+    { return arguments.cend(); }
+
+    inline size_t
+    arguments_size() const
+    { return arguments.size(); }
 };
 
 class TypePool
@@ -708,6 +767,7 @@ class TypePool
     std::map<std::string, std::unique_ptr<ConceptType> > concept_type;
     std::map<std::string, std::unique_ptr<StructType> > struct_type;
     std::map<std::pair<StructType *, ConceptType *>, std::unique_ptr<CastedStructType> > casted_struct_type;
+    std::vector<std::unique_ptr<TemplateType> > template_type;
 public:
     class FunctionTypeBuilder
     {
@@ -806,6 +866,42 @@ public:
         friend class TypePool;
     };
 
+    class TemplateTypeBuilder
+    {
+        TypePool *owner;
+        TemplateType::Builder builder;
+
+        TemplateTypeBuilder(TypePool *owner)
+            : owner(owner), builder()
+        { }
+
+    public:
+        TemplateTypeBuilder(TemplateTypeBuilder &&b)
+            : owner(b.owner), builder(std::move(b.builder))
+        { }
+
+        inline TemplateType *
+        commit(Type *base_type)
+        {
+            TemplateType *ret = builder.release(base_type);
+            owner->template_type.emplace_back(ret);
+            return ret;
+        }
+
+        inline TemplateType *
+        get() const
+        { return builder.get(); }
+
+        inline TemplateTypeBuilder &
+        addArgument(std::string name, ConceptType *concept)
+        {
+            builder.addArgument(name, concept);
+            return *this;
+        }
+
+        friend class TypePool;
+    };
+
     TypePool() = default;
     ~TypePool() = default;
 
@@ -828,6 +924,10 @@ public:
     inline StructTypeBuilder
     getStructTypeBuilder(std::string name)
     { return StructTypeBuilder(this, name); }
+
+    inline TemplateTypeBuilder
+    getTemplateTypeBuilder()
+    { return TemplateTypeBuilder(this); }
 };
 
 }
