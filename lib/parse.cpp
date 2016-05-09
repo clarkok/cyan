@@ -594,7 +594,7 @@ Parser::expandTemplate(TemplateType *template_type, const std::vector<Type *> &a
             );
         }
 
-        template_argument_map.emplace(*required_iter, *argument_iter);
+        template_argument_map.emplace(required_iter->type.get(), *argument_iter);
 
         ++required_iter;
         ++argument_iter;
@@ -611,6 +611,8 @@ Parser::expandTemplate(TemplateType *template_type, const std::vector<Type *> &a
 
     if (!can_be_expanded) {
     }
+
+    // TODO complete template expanding
 }
 
 Type *
@@ -1955,7 +1957,7 @@ Parser::parseLogicOrExpr()
             if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
                 error_collector->error(ParseTypeErrorException(
                     location,
-                    std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
+                    std::string("operation `") + std::string(1, static_cast<char>(op)) + "` cannot be applied between " +
                     left_hand_type->to_string() + " and " + right_hand_type->to_string()
                 ));
             }
@@ -2010,7 +2012,7 @@ Parser::parseLogicAndExpr()
             if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
                 error_collector->error(ParseTypeErrorException(
                     location,
-                    std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
+                    std::string("operation `") + std::string(1, static_cast<char>(op)) + "` cannot be applied between " +
                     left_hand_type->to_string() + " and " + right_hand_type->to_string()
                 ));
             }
@@ -2063,7 +2065,7 @@ Parser::parseBitwiseOrExpr()
         if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
             error_collector->error(ParseTypeErrorException(
                 location,
-                std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
+                std::string("operation `") + std::string(1, static_cast<char>(op)) + "` cannot be applied between " +
                 left_hand_type->to_string() + " and " + right_hand_type->to_string()
             ));
         }
@@ -2110,7 +2112,7 @@ Parser::parseBitwiseXorExpr()
         if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
             error_collector->error(ParseTypeErrorException(
                 location,
-                std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
+                std::string("operation `") + std::string(1, static_cast<char>(op)) + "` cannot be applied between " +
                 left_hand_type->to_string() + " and " + right_hand_type->to_string()
             ));
         }
@@ -2157,7 +2159,7 @@ Parser::parseBitwiseAndExpr()
         if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
             error_collector->error(ParseTypeErrorException(
                 location,
-                std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
+                std::string("operation `") + std::string(1, static_cast<char>(op)) + "` cannot be applied between " +
                 left_hand_type->to_string() + " and " + right_hand_type->to_string()
             ));
         }
@@ -2303,7 +2305,7 @@ Parser::parseShiftExpr()
         if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
             error_collector->error(ParseTypeErrorException(
                 location,
-                std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
+                std::string("operation `") + std::string(1, static_cast<char>(op)) + "` cannot be applied between " +
                 left_hand_type->to_string() + " and " + right_hand_type->to_string()
             ));
         }
@@ -2345,7 +2347,7 @@ Parser::parseAdditiveExpr()
         if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
             error_collector->error(ParseTypeErrorException(
                 location,
-                std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
+                std::string("operation `") + std::string(1, static_cast<char>(op)) + "` cannot be applied between " +
                 left_hand_type->to_string() + " and " + right_hand_type->to_string()
             ));
         }
@@ -2401,7 +2403,7 @@ Parser::parseMultiplitiveExpr()
         if (!left_hand_type->is<NumericType>() || !right_hand_type->is<NumericType>()) {
             error_collector->error(ParseTypeErrorException(
                 location,
-                std::string("operation `") + std::string(1, op) + "` cannot be applied between " +
+                std::string("operation `") + std::string(1, static_cast<char>(op)) + "` cannot be applied between " +
                 left_hand_type->to_string() + " and " + right_hand_type->to_string()
             ));
         }

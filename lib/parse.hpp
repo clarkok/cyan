@@ -9,6 +9,7 @@
 #include <string>
 #include <stack>
 #include <sstream>
+#include <cstring>
 
 #include "location.hpp"
 #include "symbols.hpp"
@@ -32,7 +33,7 @@ public:
 
         Buffer(size_t size, const char *content)
             : size(size), content(new TChar[size])
-        { memcpy(this->content, content, size); }
+        { std::memcpy(this->content, content, size); }
 
         Buffer(Buffer &&buffer)
             : size(buffer.size), content(buffer.content)

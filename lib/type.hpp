@@ -12,6 +12,7 @@
 #include <map>
 #include <exception>
 #include <limits>
+#include <memory>
 
 #include "cyan.hpp"
 
@@ -76,7 +77,7 @@ protected:
 
     IntegeralType(size_t bitwise_width)
         : bitwise_width(bitwise_width)
-    { assert((1 << __builtin_ctz(bitwise_width)) == bitwise_width); }
+    { assert((1u << __builtin_ctz(bitwise_width)) == bitwise_width); }
 
 public:
     inline size_t
@@ -622,6 +623,10 @@ public:
     inline ConceptType *
     getConcept() const
     { return concept; }
+
+    inline std::string
+    getName() const
+    { return name; }
 
     virtual size_t size() const;
     virtual std::string to_string() const;
