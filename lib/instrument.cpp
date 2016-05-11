@@ -4,6 +4,7 @@
 
 #include "ir.hpp"
 #include "instrument.hpp"
+#include "codegen.hpp"
 
 using namespace cyan;
 
@@ -103,3 +104,11 @@ PhiInst::to_string() const
 
     return ret;
 }
+
+#define define_codegen(type)                \
+void                                        \
+type::codegen(CodeGen *code_gen)            \
+{ code_gen->gen(this); }
+
+
+inst_foreach(define_codegen)

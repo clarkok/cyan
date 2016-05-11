@@ -11,17 +11,21 @@
 
 namespace cyan {
 
-class BasicBlock;
-class Function;
+struct BasicBlock;
+struct Function;
+
+class CodeGen;
 
 class Instrument
 {
 protected:
     Type *type;
     std::string name;
+    size_t referenced_count;
+
 public:
     Instrument(Type *type, std::string name)
-        : type(type), name(name)
+        : type(type), name(name), referenced_count(0)
     { }
 
     virtual ~Instrument() = default;
@@ -34,7 +38,20 @@ public:
     getName() const
     { return name; }
 
+    inline size_t
+    getReferencedCount() const
+    { return referenced_count; }
+
+    inline void
+    reference()
+    { ++referenced_count; }
+
+    inline void
+    unreference()
+    { --referenced_count; }
+
     virtual std::string to_string() const = 0;
+    virtual void codegen(CodeGen *) = 0;
 };
 
 class ImmediateInst : public Instrument
@@ -60,6 +77,7 @@ public:
         { return value; }                                               \
                                                                         \
         virtual std::string to_string() const;                          \
+        virtual void codegen(CodeGen *);                                \
     }
 
 defineImmInst(SignedImmInst, SignedIntegerType, intptr_t);
@@ -98,6 +116,7 @@ public:
         { }                                                                             \
                                                                                         \
         virtual std::string to_string() const;                                          \
+        virtual void codegen(CodeGen *);                                                \
     }
 
 defineBinaryInst(AddInst);
@@ -141,6 +160,7 @@ public:
     { }
 
     virtual std::string to_string() const;
+    virtual void codegen(CodeGen *);
 };
 
 class StoreInst : public MemoryInst
@@ -153,6 +173,7 @@ public:
     { }
 
     virtual std::string to_string() const;
+    virtual void codegen(CodeGen *);
 };
 
 class AllocaInst : public Instrument
@@ -165,6 +186,7 @@ public:
     { }
 
     virtual std::string to_string() const;
+    virtual void codegen(CodeGen *);
 };
 
 class CallInst : public Instrument
@@ -227,6 +249,7 @@ public:
     { return arguments.size(); }
 
     virtual std::string to_string() const;
+    virtual void codegen(CodeGen *);
 };
 
 class RetInst : public Instrument
@@ -243,6 +266,7 @@ public:
     { return return_value; }
 
     virtual std::string to_string() const;
+    virtual void codegen(CodeGen *);
 };
 
 class PhiInst : public Instrument
@@ -311,7 +335,35 @@ public:
     { return branches.size(); }
 
     virtual std::string to_string() const;
+    virtual void codegen(CodeGen *);
 };
+
+#define inst_foreach(macro) \
+    macro(Instrument)       \
+    macro(SignedImmInst)    \
+    macro(UnsignedImmInst)  \
+    macro(GlobalInst)       \
+    macro(ArgInst)          \
+    macro(AddInst)          \
+    macro(SubInst)          \
+    macro(MulInst)          \
+    macro(DivInst)          \
+    macro(ModInst)          \
+    macro(ShlInst)          \
+    macro(ShrInst)          \
+    macro(OrInst)           \
+    macro(AndInst)          \
+    macro(NorInst)          \
+    macro(XorInst)          \
+    macro(SeqInst)          \
+    macro(SltInst)          \
+    macro(SleInst)          \
+    macro(LoadInst)         \
+    macro(StoreInst)        \
+    macro(AllocaInst)       \
+    macro(CallInst)         \
+    macro(RetInst)          \
+    macro(PhiInst)
 
 }
 

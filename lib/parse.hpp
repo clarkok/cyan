@@ -298,9 +298,7 @@ public:
 
     bool parse();
 
-    inline std::unique_ptr<IR>
-    release()
-    { return std::unique_ptr<IR>(ir_builder->release()); }
+    std::unique_ptr<IR> release();
 };
 
 }

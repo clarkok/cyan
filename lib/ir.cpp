@@ -45,6 +45,12 @@ Function::output(std::ostream &os) const
 std::ostream &
 IR::output(std::ostream &os) const
 {
+    for (auto &global : global_defines) {
+        os << "global " << global.first << "\t: " << global.second->to_string() << std::endl;
+    }
+
+    os << std::endl;
+
     for (auto &func : function_table) {
         func.second->output(os) << std::endl;
     }

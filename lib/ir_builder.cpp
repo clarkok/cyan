@@ -51,6 +51,8 @@ IRBuilder::BlockBuilder::AddInst(Type *type, Instrument *left, Instrument *right
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class AddInst(type, left, right, tempName(name)));
+    left->reference();
+    right->reference();
     return ret;
 }
 
@@ -60,6 +62,8 @@ IRBuilder::BlockBuilder::SubInst(Type *type, Instrument *left, Instrument *right
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class SubInst(type, left, right, tempName(name)));
+    left->reference();
+    right->reference();
     return ret;
 }
 
@@ -69,6 +73,8 @@ IRBuilder::BlockBuilder::MulInst(Type *type, Instrument *left, Instrument *right
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class MulInst(type, left, right, tempName(name)));
+    left->reference();
+    right->reference();
     return ret;
 }
 
@@ -78,6 +84,8 @@ IRBuilder::BlockBuilder::DivInst(Type *type, Instrument *left, Instrument *right
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class DivInst(type, left, right, tempName(name)));
+    left->reference();
+    right->reference();
     return ret;
 }
 
@@ -87,6 +95,8 @@ IRBuilder::BlockBuilder::ModInst(Type *type, Instrument *left, Instrument *right
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class ModInst(type, left, right, tempName(name)));
+    left->reference();
+    right->reference();
     return ret;
 }
 
@@ -96,6 +106,8 @@ IRBuilder::BlockBuilder::ShlInst(Type *type, Instrument *left, Instrument *right
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class ShlInst(type, left, right, tempName(name)));
+    left->reference();
+    right->reference();
     return ret;
 }
 
@@ -105,6 +117,8 @@ IRBuilder::BlockBuilder::ShrInst(Type *type, Instrument *left, Instrument *right
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class ShrInst(type, left, right, tempName(name)));
+    left->reference();
+    right->reference();
     return ret;
 }
 
@@ -114,6 +128,8 @@ IRBuilder::BlockBuilder::OrInst(Type *type, Instrument *left, Instrument *right,
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class OrInst(type, left, right, tempName(name)));
+    left->reference();
+    right->reference();
     return ret;
 }
 
@@ -123,6 +139,8 @@ IRBuilder::BlockBuilder::AndInst(Type *type, Instrument *left, Instrument *right
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class AndInst(type, left, right, tempName(name)));
+    left->reference();
+    right->reference();
     return ret;
 }
 
@@ -132,6 +150,8 @@ IRBuilder::BlockBuilder::NorInst(Type *type, Instrument *left, Instrument *right
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class NorInst(type, left, right, tempName(name)));
+    left->reference();
+    right->reference();
     return ret;
 }
 
@@ -141,6 +161,8 @@ IRBuilder::BlockBuilder::XorInst(Type *type, Instrument *left, Instrument *right
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class XorInst(type, left, right, tempName(name)));
+    left->reference();
+    right->reference();
     return ret;
 }
 
@@ -150,6 +172,8 @@ IRBuilder::BlockBuilder::SeqInst(Type *type, Instrument *left, Instrument *right
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class SeqInst(type, left, right, tempName(name)));
+    left->reference();
+    right->reference();
     return ret;
 }
 
@@ -159,6 +183,8 @@ IRBuilder::BlockBuilder::SltInst(Type *type, Instrument *left, Instrument *right
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class SltInst(type, left, right, tempName(name)));
+    left->reference();
+    right->reference();
     return ret;
 }
 
@@ -168,6 +194,8 @@ IRBuilder::BlockBuilder::SleInst(Type *type, Instrument *left, Instrument *right
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class SleInst(type, left, right, tempName(name)));
+    left->reference();
+    right->reference();
     return ret;
 }
 
@@ -177,6 +205,7 @@ IRBuilder::BlockBuilder::LoadInst(Type *type, Instrument *address, std::string n
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class LoadInst(type, address, tempName(name)));
+    address->reference();
     return ret;
 }
 
@@ -186,6 +215,8 @@ IRBuilder::BlockBuilder::StoreInst(Type *type, Instrument *address, Instrument *
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class StoreInst(type, address, value, tempName(name)));
+    address->reference();
+    value->reference();
     return ret;
 }
 
@@ -195,6 +226,7 @@ IRBuilder::BlockBuilder::AllocaInst(Type *type, Instrument *space, std::string n
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class AllocaInst(type, space, tempName(name)));
+    space->reference();
     return ret;
 }
 
@@ -204,6 +236,9 @@ IRBuilder::BlockBuilder::RetInst(Type *type, Instrument *return_value)
     assert(!productEnded());
     Instrument *ret;
     product->inst_list.emplace_back(ret = new class RetInst(type, return_value));
+    if (return_value) {
+        return_value->reference();
+    }
     return ret;
 }
 
@@ -227,6 +262,11 @@ Instrument *
 IRBuilder::BlockBuilder::PhiInst(class PhiInst *inst)
 {
     assert(!productEnded());
+
+    for (auto &branch : *inst) {
+        branch.value->reference();
+    }
+
     product->inst_list.emplace_back(inst);
     return inst;
 }
@@ -239,6 +279,11 @@ Instrument *
 IRBuilder::BlockBuilder::CallInst(class CallInst *inst)
 {
     assert(!productEnded());
+
+    for (auto &argument : *inst) {
+        argument->reference();
+    }
+
     product->inst_list.emplace_back(inst);
     return inst;
 }

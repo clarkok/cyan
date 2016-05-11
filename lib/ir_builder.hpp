@@ -184,8 +184,15 @@ public:
     virtual std::unique_ptr<FunctionBuilder> findFunction(std::string name);
 
     inline IR *
-    release()
-    { return product.release(); }
+    release(TypePool *type_pool)
+    {
+        product->type_pool.reset(type_pool);
+        return product.release();
+    }
+
+    inline void
+    defineGlobal(std::string name, Type *type)
+    { product->global_defines.emplace(name, type); }
 };
 
 }

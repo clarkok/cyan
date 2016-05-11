@@ -18,7 +18,7 @@
 
 namespace cyan {
 
-class Function;
+struct Function;
 
 class Type
 {

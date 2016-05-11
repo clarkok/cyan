@@ -2963,3 +2963,15 @@ Parser::parseUnaryExpr()
             throw ParseExpectErrorException(location, "unary", _tokenLiteral());
     }
 }
+
+std::unique_ptr<IR>
+Parser::release()
+{
+    for (auto &symbol_pair : *symbol_table->rootScope()) {
+        if (symbol_pair.second->klass == Symbol::K_GLOBAL) {
+            ir_builder->defineGlobal(symbol_pair.first, symbol_pair.second->type);
+        }
+    }
+
+    return std::unique_ptr<IR>(ir_builder->release(type_pool.release()));
+}

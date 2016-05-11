@@ -15,7 +15,7 @@
 
 namespace cyan {
 
-class BasicBlock
+struct BasicBlock
 {
     std::vector<std::unique_ptr<Instrument> > inst_list;
     std::string name;
@@ -23,16 +23,17 @@ class BasicBlock
     Instrument *condition;
     BasicBlock *then_block;
     BasicBlock *else_block;
+    int depth;
 
-    BasicBlock(std::string name)
+    BasicBlock(std::string name, int depth = 0)
         : name(name),
           dominator(nullptr),
           condition(nullptr),
           then_block(nullptr),
-          else_block(nullptr)
+          else_block(nullptr),
+          depth(depth)
     { }
 
-public:
     ~BasicBlock() = default;
 
     inline auto
@@ -75,12 +76,14 @@ public:
     getName() const
     { return name; }
 
-    std::ostream &output(std::ostream &os) const;
+    inline int
+    getDepth() const
+    { return depth; }
 
-    friend class IRBuilder;
+    std::ostream &output(std::ostream &os) const;
 };
 
-class Function
+struct Function
 {
     std::list<std::unique_ptr<BasicBlock> > block_list;
     std::string name;
@@ -92,7 +95,6 @@ class Function
         : name(name), prototype(prototype), local_temp_counter(0)
     { }
 
-public:
     ~Function() = default;
 
     inline auto
@@ -138,22 +140,18 @@ public:
     }
 
     std::ostream &output(std::ostream &os) const;
-
-    friend class IRBuilder;
 };
 
-class IR
+struct IR
 {
     std::map<std::string, std::unique_ptr<Function> > function_table;
     std::map<std::string, Type *> global_defines;
+    std::unique_ptr<TypePool> type_pool;
 
     IR() = default;
-public:
     ~IR() = default;
 
     std::ostream &output(std::ostream &os) const;
-
-    friend class IRBuilder;
 };
 
 }

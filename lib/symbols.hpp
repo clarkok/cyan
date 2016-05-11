@@ -158,6 +158,10 @@ public:
     currentScope() const
     { return current_scope; }
 
+    inline SymbolScope *
+    rootScope() const
+    { return root_scope.get(); }
+
     inline Symbol *
     lookup(std::string name) const
     { return current_scope->lookup(name); }
