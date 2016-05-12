@@ -9,232 +9,232 @@
 
 using namespace cyan;
 
-Instrument *
+Instruction *
 IRBuilder::BlockBuilder::SignedImmInst(SignedIntegerType *type, intptr_t value, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class SignedImmInst(type, value, tempName(name)));
     return ret;
 }
 
-Instrument *
+Instruction *
 IRBuilder::BlockBuilder::UnsignedImmInst(UnsignedIntegerType *type, uintptr_t value, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class UnsignedImmInst(type, value, tempName(name)));
     return ret;
 }
 
-Instrument *
+Instruction *
 IRBuilder::BlockBuilder::GlobalInst(PointerType *type, std::string value, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class GlobalInst(type, value, tempName(name)));
     return ret;
 }
 
-Instrument *
+Instruction *
 IRBuilder::BlockBuilder::ArgInst(PointerType *type, intptr_t value, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class ArgInst(type, value, tempName(name)));
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::AddInst(Type *type, Instrument *left, Instrument *right, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::AddInst(Type *type, Instruction *left, Instruction *right, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class AddInst(type, left, right, tempName(name)));
     left->reference();
     right->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::SubInst(Type *type, Instrument *left, Instrument *right, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::SubInst(Type *type, Instruction *left, Instruction *right, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class SubInst(type, left, right, tempName(name)));
     left->reference();
     right->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::MulInst(Type *type, Instrument *left, Instrument *right, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::MulInst(Type *type, Instruction *left, Instruction *right, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class MulInst(type, left, right, tempName(name)));
     left->reference();
     right->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::DivInst(Type *type, Instrument *left, Instrument *right, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::DivInst(Type *type, Instruction *left, Instruction *right, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class DivInst(type, left, right, tempName(name)));
     left->reference();
     right->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::ModInst(Type *type, Instrument *left, Instrument *right, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::ModInst(Type *type, Instruction *left, Instruction *right, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class ModInst(type, left, right, tempName(name)));
     left->reference();
     right->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::ShlInst(Type *type, Instrument *left, Instrument *right, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::ShlInst(Type *type, Instruction *left, Instruction *right, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class ShlInst(type, left, right, tempName(name)));
     left->reference();
     right->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::ShrInst(Type *type, Instrument *left, Instrument *right, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::ShrInst(Type *type, Instruction *left, Instruction *right, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class ShrInst(type, left, right, tempName(name)));
     left->reference();
     right->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::OrInst(Type *type, Instrument *left, Instrument *right, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::OrInst(Type *type, Instruction *left, Instruction *right, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class OrInst(type, left, right, tempName(name)));
     left->reference();
     right->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::AndInst(Type *type, Instrument *left, Instrument *right, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::AndInst(Type *type, Instruction *left, Instruction *right, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class AndInst(type, left, right, tempName(name)));
     left->reference();
     right->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::NorInst(Type *type, Instrument *left, Instrument *right, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::NorInst(Type *type, Instruction *left, Instruction *right, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class NorInst(type, left, right, tempName(name)));
     left->reference();
     right->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::XorInst(Type *type, Instrument *left, Instrument *right, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::XorInst(Type *type, Instruction *left, Instruction *right, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class XorInst(type, left, right, tempName(name)));
     left->reference();
     right->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::SeqInst(Type *type, Instrument *left, Instrument *right, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::SeqInst(Type *type, Instruction *left, Instruction *right, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class SeqInst(type, left, right, tempName(name)));
     left->reference();
     right->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::SltInst(Type *type, Instrument *left, Instrument *right, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::SltInst(Type *type, Instruction *left, Instruction *right, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class SltInst(type, left, right, tempName(name)));
     left->reference();
     right->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::SleInst(Type *type, Instrument *left, Instrument *right, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::SleInst(Type *type, Instruction *left, Instruction *right, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class SleInst(type, left, right, tempName(name)));
     left->reference();
     right->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::LoadInst(Type *type, Instrument *address, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::LoadInst(Type *type, Instruction *address, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class LoadInst(type, address, tempName(name)));
     address->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::StoreInst(Type *type, Instrument *address, Instrument *value, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::StoreInst(Type *type, Instruction *address, Instruction *value, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class StoreInst(type, address, value, tempName(name)));
     address->reference();
     value->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::AllocaInst(Type *type, Instrument *space, std::string name)
+Instruction *
+IRBuilder::BlockBuilder::AllocaInst(Type *type, Instruction *space, std::string name)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class AllocaInst(type, space, tempName(name)));
     space->reference();
     return ret;
 }
 
-Instrument *
-IRBuilder::BlockBuilder::RetInst(Type *type, Instrument *return_value)
+Instruction *
+IRBuilder::BlockBuilder::RetInst(Type *type, Instruction *return_value)
 {
     assert(!productEnded());
-    Instrument *ret;
+    Instruction *ret;
     product->inst_list.emplace_back(ret = new class RetInst(type, return_value));
     if (return_value) {
         return_value->reference();
@@ -250,15 +250,16 @@ IRBuilder::BlockBuilder::JumpInst(BasicBlock *block)
 }
 
 void
-IRBuilder::BlockBuilder::BrInst(Instrument *condition, BasicBlock *then_block, BasicBlock *else_block)
+IRBuilder::BlockBuilder::BrInst(Instruction *condition, BasicBlock *then_block, BasicBlock *else_block)
 {
     assert(!productEnded());
     product->condition = condition;
     product->then_block = then_block;
     product->else_block = else_block;
+    condition->reference();
 }
 
-Instrument *
+Instruction *
 IRBuilder::BlockBuilder::PhiInst(class PhiInst *inst)
 {
     assert(!productEnded());
@@ -271,11 +272,11 @@ IRBuilder::BlockBuilder::PhiInst(class PhiInst *inst)
     return inst;
 }
 
-Instrument *
+Instruction *
 IRBuilder::BlockBuilder::PhiBuilder::commit()
 { return owner->PhiInst(builder.release()); }
 
-Instrument *
+Instruction *
 IRBuilder::BlockBuilder::CallInst(class CallInst *inst)
 {
     assert(!productEnded());
@@ -288,7 +289,7 @@ IRBuilder::BlockBuilder::CallInst(class CallInst *inst)
     return inst;
 }
 
-Instrument *
+Instruction *
 IRBuilder::BlockBuilder::CallBuilder::commit()
 { return owner->CallInst(builder.release()); }
 

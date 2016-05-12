@@ -42,10 +42,10 @@ public:
 
             ~PhiBuilder() = default;
 
-            Instrument *commit();
+            Instruction *commit();
 
             inline PhiBuilder &
-            addBranch(Instrument *value, BasicBlock *preceder)
+            addBranch(Instruction *value, BasicBlock *preceder)
             {
                 builder.addBranch(value, preceder);
                 return *this;
@@ -59,7 +59,7 @@ public:
             BlockBuilder *owner;
             CallInst::Builder builder;
 
-            CallBuilder(BlockBuilder *owner, Type *type, Instrument *function, std::string name)
+            CallBuilder(BlockBuilder *owner, Type *type, Instruction *function, std::string name)
                 : owner(owner), builder(type, function, name)
             { }
         public:
@@ -69,10 +69,10 @@ public:
 
             ~CallBuilder() = default;
 
-            Instrument *commit();
+            Instruction *commit();
 
             inline CallBuilder &
-            addArgument(Instrument *value)
+            addArgument(Instruction *value)
             {
                 builder.addArgument(value);
                 return *this;
@@ -108,44 +108,44 @@ public:
         { return PhiBuilder(this, type, tempName(name)); }
 
         inline CallBuilder
-        newCallBuilder(Type *type, Instrument *function, std::string name = "")
+        newCallBuilder(Type *type, Instruction *function, std::string name = "")
         { return CallBuilder(this, type, function, tempName(name)); }
 
-        virtual Instrument *SignedImmInst(SignedIntegerType *type, intptr_t value, std::string name = "");
-        virtual Instrument *UnsignedImmInst(UnsignedIntegerType *type, uintptr_t value, std::string name = "");
-        virtual Instrument *GlobalInst(PointerType *type, std::string value, std::string name = "");
-        virtual Instrument *ArgInst(PointerType *type, intptr_t value, std::string name = "");
+        virtual Instruction *SignedImmInst(SignedIntegerType *type, intptr_t value, std::string name = "");
+        virtual Instruction *UnsignedImmInst(UnsignedIntegerType *type, uintptr_t value, std::string name = "");
+        virtual Instruction *GlobalInst(PointerType *type, std::string value, std::string name = "");
+        virtual Instruction *ArgInst(PointerType *type, intptr_t value, std::string name = "");
 
-        virtual Instrument *AddInst(Type *type, Instrument *left, Instrument *right, std::string name = "");
-        virtual Instrument *SubInst(Type *type, Instrument *left, Instrument *right, std::string name = "");
-        virtual Instrument *MulInst(Type *type, Instrument *left, Instrument *right, std::string name = "");
-        virtual Instrument *DivInst(Type *type, Instrument *left, Instrument *right, std::string name = "");
-        virtual Instrument *ModInst(Type *type, Instrument *left, Instrument *right, std::string name = "");
+        virtual Instruction *AddInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        virtual Instruction *SubInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        virtual Instruction *MulInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        virtual Instruction *DivInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        virtual Instruction *ModInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
 
-        virtual Instrument *ShlInst(Type *type, Instrument *left, Instrument *right, std::string name = "");
-        virtual Instrument *ShrInst(Type *type, Instrument *left, Instrument *right, std::string name = "");
-        virtual Instrument *OrInst(Type *type, Instrument *left, Instrument *right, std::string name = "");
-        virtual Instrument *AndInst(Type *type, Instrument *left, Instrument *right, std::string name = "");
-        virtual Instrument *NorInst(Type *type, Instrument *left, Instrument *right, std::string name = "");
-        virtual Instrument *XorInst(Type *type, Instrument *left, Instrument *right, std::string name = "");
+        virtual Instruction *ShlInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        virtual Instruction *ShrInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        virtual Instruction *OrInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        virtual Instruction *AndInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        virtual Instruction *NorInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        virtual Instruction *XorInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
 
-        virtual Instrument *SeqInst(Type *type, Instrument *left, Instrument *right, std::string name = "");
-        virtual Instrument *SltInst(Type *type, Instrument *left, Instrument *right, std::string name = "");
-        virtual Instrument *SleInst(Type *type, Instrument *left, Instrument *right, std::string name = "");
+        virtual Instruction *SeqInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        virtual Instruction *SltInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        virtual Instruction *SleInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
 
-        virtual Instrument *LoadInst(Type *type, Instrument *address, std::string name = "");
-        virtual Instrument *StoreInst(Type *type, Instrument *address, Instrument *value, std::string name = "");
-        virtual Instrument *AllocaInst(Type *type, Instrument *space, std::string name = "");
+        virtual Instruction *LoadInst(Type *type, Instruction *address, std::string name = "");
+        virtual Instruction *StoreInst(Type *type, Instruction *address, Instruction *value, std::string name = "");
+        virtual Instruction *AllocaInst(Type *type, Instruction *space, std::string name = "");
 
-        virtual Instrument *RetInst(Type *type, Instrument *return_value);
+        virtual Instruction *RetInst(Type *type, Instruction *return_value);
 
         virtual void JumpInst(BasicBlock *block);
-        virtual void BrInst(Instrument *condition, BasicBlock *then_block, BasicBlock *else_block);
+        virtual void BrInst(Instruction *condition, BasicBlock *then_block, BasicBlock *else_block);
 
         friend class FunctionBuilder;
     protected:
-        virtual Instrument *CallInst(class CallInst *inst);
-        virtual Instrument *PhiInst(class PhiInst *inst);
+        virtual Instruction *CallInst(class CallInst *inst);
+        virtual Instruction *PhiInst(class PhiInst *inst);
     };
 
     class FunctionBuilder

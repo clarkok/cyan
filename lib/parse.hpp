@@ -185,7 +185,7 @@ protected:
 
     Type *last_type = nullptr;
     bool is_left_value = false;
-    Instrument *result_inst;
+    Instruction *result_inst;
     std::stack<LoopDesc> loop_stack;
 
 private:

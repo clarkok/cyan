@@ -219,7 +219,7 @@ TEST(parser_test, while_test)
     Parser *uut = new Parser(SOURCE);
     ASSERT_TRUE(uut->parse());
 
-    uut->release()->output(std::cout);
+    // uut->release()->output(std::cout);
 }
 
 TEST(parser_test, continue_test)

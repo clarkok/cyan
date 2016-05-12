@@ -6,12 +6,30 @@
 #define CYAN_CODEGEN_X64_HPP
 
 #include <map>
+#include <memory>
 
 #include "codegen.hpp"
 
 namespace X64 {
-struct Block;
+struct Instruction
+{
+    virtual ~Instruction() = default;
+    virtual std::string to_string() const = 0;
+};
+
+struct Block
+{
+    std::string name;
+    cyan::BasicBlock *ir_block;
+    std::list<std::unique_ptr<Instruction> > inst_list;
+
+    Block(std::string name, cyan::BasicBlock *ir_block)
+        : name(name), ir_block(ir_block)
+    { }
+};
+
 enum class Register;
+struct Operand;
 }
 
 namespace cyan {
@@ -23,25 +41,24 @@ public:
     static const int MEMORY_OPERATION_COST = 10;
 
 private:
-    std::map<X64::Register, int> reg_usage;
-    std::map<Instrument *, X64::Register> inst_reg;
-
+    std::map<Instruction *, size_t> inst_used;
     std::vector<std::unique_ptr<X64::Block> > block_list;
-    std::map<cyan::BasicBlock *, X64::Block *> block_map;
-    std::map<X64::Block *, cyan::BasicBlock *> block_map_r;
-    decltype(block_list.begin()) current_block;
+    std::map<BasicBlock *, X64::Block *> block_map;
+    std::map<Instruction *, std::shared_ptr<X64::Operand> > inst_result;
+    std::map<AllocaInst *, int> allocate_map;
+    int stack_allocate_counter = 0;
+
+    decltype(block_list.rbegin()) current_block_iter;
+
     std::ostream &generateFunc(std::ostream &os, Function *func);
 
-    std::vector<int> argument_stacked;
-    int function_slot_count;
-
-    int allocateStackSlot();
-    int calculateArgumentOffset(intptr_t argument);
-
-    size_t calculateRegisterCost(X64::Register);
-    X64::Register findCheapestRegister();
-    void swapOutRegister(X64::Register);
-    X64::Register allocateRegister();
+    int getAllocInstOffset(AllocaInst *inst);
+    int calculateArgumentOffset(int argument);
+    std::shared_ptr<X64::Operand> resolveOperand(Instruction *inst);
+    std::shared_ptr<X64::Operand> resolveMemory(Instruction *inst);
+    void setOrMoveOperand(Instruction *, std::shared_ptr<X64::Operand>);
+    std::shared_ptr<X64::Operand> newValue();
+    void prependInst(X64::Instruction *);
 
 public:
     CodeGenX64(IR *ir)

@@ -2,8 +2,8 @@
 // Created by Clarkok on 16/5/3.
 //
 
-#ifndef CYAN_INSTRUMENT_HPP
-#define CYAN_INSTRUMENT_HPP
+#ifndef CYAN_INSTRUCTION_HPP
+#define CYAN_INSTRUCTION_HPP
 
 #include <vector>
 
@@ -16,7 +16,7 @@ struct Function;
 
 class CodeGen;
 
-class Instrument
+class Instruction
 {
 protected:
     Type *type;
@@ -24,11 +24,11 @@ protected:
     size_t referenced_count;
 
 public:
-    Instrument(Type *type, std::string name)
+    Instruction(Type *type, std::string name)
         : type(type), name(name), referenced_count(0)
     { }
 
-    virtual ~Instrument() = default;
+    virtual ~Instruction() = default;
 
     inline Type *
     getType() const
@@ -50,15 +50,29 @@ public:
     unreference()
     { --referenced_count; }
 
+    template <typename T>
+    bool is() const
+    { return dynamic_cast<const T*>(this) != nullptr; }
+
+    template <typename T>
+    const T* to() const
+    { return dynamic_cast<const T*>(this); }
+
+    template <typename T>
+    T* to()
+    { return dynamic_cast<T*>(this); }
+
     virtual std::string to_string() const = 0;
     virtual void codegen(CodeGen *) = 0;
+    virtual void unreferenceOperand() const = 0;
+    virtual bool isCodeGenRoot() const = 0;
 };
 
-class ImmediateInst : public Instrument
+class ImmediateInst : public Instruction
 {
 public:
     ImmediateInst(Type *type, std::string name)
-        : Instrument(type, name)
+        : Instruction(type, name)
     { }
 };
 
@@ -78,6 +92,8 @@ public:
                                                                         \
         virtual std::string to_string() const;                          \
         virtual void codegen(CodeGen *);                                \
+        virtual void unreferenceOperand() const;                        \
+        virtual bool isCodeGenRoot() const { return false; }            \
     }
 
 defineImmInst(SignedImmInst, SignedIntegerType, intptr_t);
@@ -87,36 +103,41 @@ defineImmInst(ArgInst, PointerType, intptr_t);
 
 #undef defineImmInst
 
-class BinaryInst : public Instrument
+class BinaryInst : public Instruction
 {
 protected:
-    Instrument *left, *right;
+    Instruction *left, *right;
 public:
-    BinaryInst(Type *type, Instrument *left, Instrument *right, std::string name)
-        : Instrument(type, name),
+    BinaryInst(Type *type, Instruction *left, Instruction *right, std::string name)
+        : Instruction(type, name),
           left(left),
           right(right)
     { }
 
-    inline Instrument *
+    inline Instruction *
     getLeft() const
     { return left; }
 
-    inline Instrument *
+    inline Instruction *
     getRight() const
     { return right; }
+
+    virtual bool
+    isCodeGenRoot() const
+    { return false; }
 };
 
 #define defineBinaryInst(_name)                                                         \
     class _name : public BinaryInst                                                     \
     {                                                                                   \
     public:                                                                             \
-        _name(Type *type, Instrument *left, Instrument *right, std::string name)        \
+        _name(Type *type, Instruction *left, Instruction *right, std::string name)      \
             : BinaryInst(type, left, right, name)                                       \
         { }                                                                             \
                                                                                         \
         virtual std::string to_string() const;                                          \
         virtual void codegen(CodeGen *);                                                \
+        virtual void unreferenceOperand() const;                                        \
     }
 
 defineBinaryInst(AddInst);
@@ -138,16 +159,16 @@ defineBinaryInst(SleInst);
 
 #undef defineBinaryInst
 
-class MemoryInst : public Instrument
+class MemoryInst : public Instruction
 {
 protected:
-    Instrument *address;
+    Instruction *address;
 public:
-    MemoryInst(Type *type, Instrument *address, std::string name)
-        : Instrument(type, name), address(address)
+    MemoryInst(Type *type, Instruction *address, std::string name)
+        : Instruction(type, name), address(address)
     { }
 
-    inline Instrument *
+    inline Instruction *
     getAddress() const
     { return address; }
 };
@@ -155,48 +176,68 @@ public:
 class LoadInst : public MemoryInst
 {
 public:
-    LoadInst(Type *type, Instrument *address, std::string name)
+    LoadInst(Type *type, Instruction *address, std::string name)
         : MemoryInst(type, address, name)
     { }
 
     virtual std::string to_string() const;
     virtual void codegen(CodeGen *);
+    virtual void unreferenceOperand() const;
+    virtual bool
+    isCodeGenRoot() const
+    { return false; }
 };
 
 class StoreInst : public MemoryInst
 {
 protected:
-    Instrument *value;
+    Instruction *value;
 public:
-    StoreInst(Type *type, Instrument *address, Instrument *value, std::string name)
+    StoreInst(Type *type, Instruction *address, Instruction *value, std::string name)
         : MemoryInst(type, address, name), value(value)
     { }
 
+    inline Instruction *
+    getValue() const
+    { return value; }
+
     virtual std::string to_string() const;
     virtual void codegen(CodeGen *);
+    virtual void unreferenceOperand() const;
+    virtual bool
+    isCodeGenRoot() const
+    { return true; }
 };
 
-class AllocaInst : public Instrument
+class AllocaInst : public Instruction
 {
 protected:
-    Instrument *space;
+    Instruction *space;
 public:
-    AllocaInst(Type *type, Instrument *space, std::string name)
-        : Instrument(type, name), space(space)
+    AllocaInst(Type *type, Instruction *space, std::string name)
+        : Instruction(type, name), space(space)
     { }
 
+    inline Instruction *
+    getSpace() const
+    { return space; }
+
     virtual std::string to_string() const;
     virtual void codegen(CodeGen *);
+    virtual void unreferenceOperand() const;
+    virtual bool
+    isCodeGenRoot() const
+    { return false; }
 };
 
-class CallInst : public Instrument
+class CallInst : public Instruction
 {
 protected:
-    Instrument *function;
-    std::vector<Instrument *> arguments;
+    Instruction *function;
+    std::vector<Instruction *> arguments;
 
-    CallInst(Type *type, Instrument *function, std::string name)
-        : Instrument(type, name), function(function)
+    CallInst(Type *type, Instruction *function, std::string name)
+        : Instruction(type, name), function(function)
     { }
 
 public:
@@ -204,7 +245,7 @@ public:
     {
         std::unique_ptr<CallInst> product;
 
-        Builder(Type *type, Instrument *function, std::string name = "")
+        Builder(Type *type, Instruction *function, std::string name = "")
             : product(new CallInst(type, function, name))
         { }
 
@@ -217,14 +258,14 @@ public:
         { return product.release(); }
 
         inline Builder &
-        addArgument(Instrument *argument)
+        addArgument(Instruction *argument)
         {
             product->arguments.push_back(argument);
             return *this;
         }
     };
 
-    inline Instrument *
+    inline Instruction *
     getFunction() const
     { return function; }
 
@@ -248,36 +289,50 @@ public:
     arguments_size() const -> decltype(arguments.size())
     { return arguments.size(); }
 
+    inline Instruction *
+    getArgumentByIndex(size_t index) const
+    { return arguments[index]; }
+
     virtual std::string to_string() const;
     virtual void codegen(CodeGen *);
+    virtual void unreferenceOperand() const;
+
+    virtual bool
+    isCodeGenRoot() const
+    { return true; }
 };
 
-class RetInst : public Instrument
+class RetInst : public Instruction
 {
 protected:
-    Instrument *return_value;
+    Instruction *return_value;
 public:
-    RetInst(Type *type, Instrument *return_value)
-        : Instrument(type, ""), return_value(return_value)
+    RetInst(Type *type, Instruction *return_value)
+        : Instruction(type, ""), return_value(return_value)
     { }
 
-    inline Instrument *
+    inline Instruction *
     getReturnValue() const
     { return return_value; }
 
     virtual std::string to_string() const;
     virtual void codegen(CodeGen *);
+    virtual void unreferenceOperand() const;
+
+    virtual bool
+    isCodeGenRoot() const
+    { return true; }
 };
 
-class PhiInst : public Instrument
+class PhiInst : public Instruction
 {
 public:
     struct Branch
     {
-        Instrument *value;
+        Instruction *value;
         BasicBlock *preceder;
 
-        Branch(Instrument *value, BasicBlock *preceder)
+        Branch(Instruction *value, BasicBlock *preceder)
             : value(value), preceder(preceder)
         { }
     };
@@ -286,7 +341,7 @@ protected:
     std::vector<Branch> branches;
 
     PhiInst(Type *type, std::string name)
-        : Instrument(type, name)
+        : Instruction(type, name)
     { }
 
 public:
@@ -307,7 +362,7 @@ public:
         { return product.release(); }
 
         inline Builder &
-        addBranch(Instrument *value, BasicBlock *preceder)
+        addBranch(Instruction *value, BasicBlock *preceder)
         {
             product->branches.emplace_back(value, preceder);
             return *this;
@@ -336,10 +391,15 @@ public:
 
     virtual std::string to_string() const;
     virtual void codegen(CodeGen *);
+    virtual void unreferenceOperand() const;
+
+    virtual bool
+    isCodeGenRoot() const
+    { return false; }
 };
 
 #define inst_foreach(macro) \
-    macro(Instrument)       \
+    macro(Instruction)      \
     macro(SignedImmInst)    \
     macro(UnsignedImmInst)  \
     macro(GlobalInst)       \

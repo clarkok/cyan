@@ -10,17 +10,17 @@
 #include <set>
 #include <iostream>
 
-#include "instrument.hpp"
+#include "instruction.hpp"
 #include "type.hpp"
 
 namespace cyan {
 
 struct BasicBlock
 {
-    std::vector<std::unique_ptr<Instrument> > inst_list;
+    std::vector<std::unique_ptr<Instruction> > inst_list;
     std::string name;
     BasicBlock *dominator;
-    Instrument *condition;
+    Instruction *condition;
     BasicBlock *then_block;
     BasicBlock *else_block;
     int depth;
@@ -60,7 +60,7 @@ struct BasicBlock
     getDominator() const
     { return dominator; }
 
-    inline Instrument *
+    inline Instruction *
     getCondition() const
     { return condition; }
 

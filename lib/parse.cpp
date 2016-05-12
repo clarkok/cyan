@@ -2566,7 +2566,7 @@ Parser::parsePostfixExpr()
 {
     parseUnaryExpr();
 
-    Instrument *this_value = nullptr;
+    Instruction *this_value = nullptr;
 
     while (true) {
         if (_peak() == T_INC) {
@@ -2933,7 +2933,7 @@ Parser::parseUnaryExpr()
                 );
             }
             else if (symbol->klass == Symbol::K_VARIABLE) {
-                result_inst = reinterpret_cast<Instrument *>(symbol->token_value);
+                result_inst = reinterpret_cast<Instruction *>(symbol->token_value);
             }
             else if (symbol->klass == Symbol::K_FUNCTION) {
                 result_inst = current_block->GlobalInst(

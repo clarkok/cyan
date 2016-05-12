@@ -3,7 +3,7 @@
 //
 
 #include "ir.hpp"
-#include "instrument.hpp"
+#include "instruction.hpp"
 #include "codegen.hpp"
 
 using namespace cyan;
@@ -103,6 +103,85 @@ PhiInst::to_string() const
     ret.pop_back();
 
     return ret;
+}
+
+#define imm_unreference_operand(Type)       \
+    void                                    \
+    Type::unreferenceOperand() const        \
+    { }
+
+imm_unreference_operand(SignedImmInst)
+imm_unreference_operand(UnsignedImmInst)
+imm_unreference_operand(GlobalInst)
+imm_unreference_operand(ArgInst)
+
+#undef imm_unreference_operand
+
+#define binary_unreference_operand(Type)    \
+    void                                    \
+    Type::unreferenceOperand() const        \
+    {                                       \
+        getLeft()->unreference();           \
+        getRight()->unreference();          \
+    }
+
+binary_unreference_operand(AddInst)
+binary_unreference_operand(SubInst)
+binary_unreference_operand(MulInst)
+binary_unreference_operand(DivInst)
+binary_unreference_operand(ModInst)
+
+binary_unreference_operand(ShlInst)
+binary_unreference_operand(ShrInst)
+binary_unreference_operand(OrInst)
+binary_unreference_operand(AndInst)
+binary_unreference_operand(NorInst)
+binary_unreference_operand(XorInst)
+
+binary_unreference_operand(SeqInst)
+binary_unreference_operand(SltInst)
+binary_unreference_operand(SleInst)
+
+#undef binary_unreference_operand
+
+void
+LoadInst::unreferenceOperand() const
+{ getAddress()->unreference(); }
+
+void
+StoreInst::unreferenceOperand() const
+{
+    getAddress()->unreference();
+    getValue()->unreference();
+}
+
+void
+AllocaInst::unreferenceOperand() const
+{ getSpace()->unreference(); }
+
+void
+CallInst::unreferenceOperand() const
+{
+    function->unreference();
+    for (auto &arg : arguments) {
+        arg->unreference();
+    }
+}
+
+void
+RetInst::unreferenceOperand() const
+{
+    if (return_value) {
+        return_value->unreference();
+    }
+}
+
+void
+PhiInst::unreferenceOperand() const
+{
+    for (auto &branch : branches) {
+        branch.value->unreference();
+    }
 }
 
 #define define_codegen(type)                \
