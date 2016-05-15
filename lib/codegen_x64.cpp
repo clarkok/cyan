@@ -33,6 +33,10 @@ enum class Register
     RSP
 };
 
+inline Register
+next(Register reg)
+{ return static_cast<Register>(static_cast<std::underlying_type<Register>::type>(reg) + 1); }
+
 #define register_foreach(__r)                                       \
     for (                                                           \
         X64::Register __r = X64::Register::RBX;                     \
@@ -95,12 +99,6 @@ struct ValueOperand : public Operand
     ValueOperand()
         : count(++counter)
     { }
-
-    /*
-    virtual std::string
-    to_string() const
-    { return actual_operand->to_string(); }
-     */
 
     virtual std::string
     to_string() const
@@ -199,6 +197,21 @@ struct ImmediateOperand : public Operand
     { return std::to_string(value); }
 };
 
+struct Label : public Instruction
+{
+    std::string name;
+
+    Label(std::string name)
+        : name(name)
+    { }
+
+    virtual std::string
+    to_string() const
+    { return "\n" + name + ":"; }
+
+    virtual void registerAllocate(cyan::CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+};
+
 struct Mov : public Instruction
 {
     std::shared_ptr<Operand> dst, src;
@@ -210,6 +223,8 @@ struct Mov : public Instruction
     virtual std::string
     to_string() const
     { return "mov " + dst->to_string() + ", " + src->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Add : public Instruction
@@ -223,6 +238,8 @@ struct Add : public Instruction
     virtual std::string
     to_string() const
     { return "add " + dst->to_string() + ", " + src->to_string(); };
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct And : public Instruction
@@ -236,19 +253,23 @@ struct And : public Instruction
     virtual std::string
     to_string() const
     { return "and " + dst->to_string() + ", " + src->to_string(); };
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Call : public Instruction
 {
-    std::shared_ptr<LabelOperand> label;
+    std::shared_ptr<Operand> func;
 
-    Call(std::shared_ptr<LabelOperand> label)
-        : label(label)
+    Call(std::shared_ptr<Operand> label)
+        : func(label)
     { }
 
     virtual std::string
     to_string() const
-    { return "call " + label->to_string(); }
+    { return "call " + func->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct CallPreserve : public Instruction
@@ -262,6 +283,8 @@ struct CallPreserve : public Instruction
     virtual std::string
     to_string() const
     { return "// preserving"; }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct CallRestore : public Instruction
@@ -275,6 +298,8 @@ struct CallRestore : public Instruction
     virtual std::string
     to_string() const
     { return "// restoring"; }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Cmp : public Instruction
@@ -288,6 +313,8 @@ struct Cmp : public Instruction
     virtual std::string
     to_string() const
     { return "cmp " + left->to_string() + ", " + right->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Idiv : public Instruction
@@ -300,6 +327,8 @@ struct Idiv : public Instruction
 
     // TODO implement div instruction
     virtual std::string to_string() const = 0;
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Imod : public Instruction
@@ -312,6 +341,8 @@ struct Imod : public Instruction
 
     // TODO implement mod instruction
     virtual std::string to_string() const = 0;
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Imul : public Instruction
@@ -325,6 +356,8 @@ struct Imul : public Instruction
     virtual std::string
     to_string() const
     { return "imul " + dst->to_string() + ", " + src->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Jmp : public Instruction
@@ -338,6 +371,8 @@ struct Jmp : public Instruction
     virtual std::string
     to_string() const
     { return "jmp " + label->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Je : public Instruction
@@ -351,6 +386,8 @@ struct Je : public Instruction
     virtual std::string
     to_string() const
     { return "je " + label->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Jne : public Instruction
@@ -364,6 +401,8 @@ struct Jne : public Instruction
     virtual std::string
     to_string() const
     { return "jne " + label->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Jg : public Instruction
@@ -377,6 +416,8 @@ struct Jg : public Instruction
     virtual std::string
     to_string() const
     { return "jg " + label->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Jge : public Instruction
@@ -390,6 +431,8 @@ struct Jge : public Instruction
     virtual std::string
     to_string() const
     { return "jge " + label->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Jl : public Instruction
@@ -403,6 +446,8 @@ struct Jl : public Instruction
     virtual std::string
     to_string() const
     { return "jl " + label->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Jle : public Instruction
@@ -416,32 +461,8 @@ struct Jle : public Instruction
     virtual std::string
     to_string() const
     { return "jle " + label->to_string(); }
-};
 
-struct Jz : public Instruction
-{
-    std::shared_ptr<LabelOperand> label;
-
-    Jz(std::shared_ptr<LabelOperand> label)
-        : label(label)
-    { }
-
-    virtual std::string
-    to_string() const
-    { return "jz " + label->to_string(); }
-};
-
-struct Jnz : public Instruction
-{
-    std::shared_ptr<LabelOperand> label;
-
-    Jnz(std::shared_ptr<LabelOperand> label)
-        : label(label)
-    { }
-
-    virtual std::string
-    to_string() const
-    { return "jnz " + label->to_string(); }
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct LeaOffset : public Instruction
@@ -463,6 +484,8 @@ struct LeaOffset : public Instruction
             base->to_string() + (offset->to<ImmediateOperand>()->value >= 0 ? "+" : "") +
             offset->to_string() + "]";
     }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct LeaGlobal : public Instruction
@@ -479,6 +502,8 @@ struct LeaGlobal : public Instruction
     virtual std::string
     to_string() const
     { return "lea " + dst->to_string() + ", " + global->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Neg : public Instruction
@@ -492,6 +517,8 @@ struct Neg : public Instruction
     virtual std::string
     to_string() const
     { return "neg " + dst->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Not : public Instruction
@@ -505,6 +532,8 @@ struct Not : public Instruction
     virtual std::string
     to_string() const
     { return "not " + dst->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Or : public Instruction
@@ -518,6 +547,8 @@ struct Or : public Instruction
     virtual std::string
     to_string() const
     { return "or " + dst->to_string() + ", " + src->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Pop : public Instruction
@@ -531,6 +562,8 @@ struct Pop : public Instruction
     virtual std::string
     to_string() const
     { return "pop " + dst->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Push : public Instruction
@@ -544,6 +577,8 @@ struct Push : public Instruction
     virtual std::string
     to_string() const
     { return "push " + src->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Ret : public Instruction
@@ -551,6 +586,8 @@ struct Ret : public Instruction
     virtual std::string
     to_string() const
     { return "ret"; }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Sal : public Instruction
@@ -564,6 +601,8 @@ struct Sal : public Instruction
     virtual std::string
     to_string() const
     { return "sal " + dst->to_string() + ", " + src->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Sar : public Instruction
@@ -577,6 +616,8 @@ struct Sar : public Instruction
     virtual std::string
     to_string() const
     { return "sar " + dst->to_string() + ", " + src->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct SetE : public Instruction
@@ -590,6 +631,8 @@ struct SetE : public Instruction
     virtual std::string
     to_string() const
     { return "sete " + dst->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct SetL : public Instruction
@@ -603,6 +646,8 @@ struct SetL : public Instruction
     virtual std::string
     to_string() const
     { return "setl " + dst->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct SetLe : public Instruction
@@ -616,6 +661,8 @@ struct SetLe : public Instruction
     virtual std::string
     to_string() const
     { return "setle " + dst->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Shr : public Instruction
@@ -629,6 +676,8 @@ struct Shr : public Instruction
     virtual std::string
     to_string() const
     { return "sar " + dst->to_string() + ", " + src->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Sub : public Instruction
@@ -642,6 +691,8 @@ struct Sub : public Instruction
     virtual std::string
     to_string() const
     { return "sub " + dst->to_string() + ", " + src->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 struct Xor : public Instruction
@@ -655,6 +706,8 @@ struct Xor : public Instruction
     virtual std::string
     to_string() const
     { return "xor " + dst->to_string() + ", " + src->to_string(); }
+
+    virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
 
 }
@@ -671,29 +724,26 @@ CodeGenX64::generate(std::ostream &os)
 
     os << std::endl << ".text" << std::endl;
     for (auto &func : ir->function_table) {
+        current_func = func.second.get();
         os << "\t.globl " << func.first << "\n"
            << "\t.type " << func.first << " @function\n"
            << func.first << ":" << std::endl;
 
-        generateFunc(os, func.second.get());
+        generateFunc(func.second.get());
 
-        for (auto &block_ptr : block_list) {
-            os << func.second->getName() + "." + block_ptr->name << ":\n";
-            for (auto &inst_ptr : block_ptr->inst_list) {
-                os << "\t" << inst_ptr->to_string() << "\n";
-            }
-            os << std::endl;
+        for (auto &inst_ptr : inst_list) {
+            os << "\t" << inst_ptr->to_string() << "\n";
         }
 
         os << func.first << ".end:\n"
-           << "\t.size " << func.first << " .-" << func.first << "\n" << std::endl;
+           << "\t.size " << func.first << ", .-" << func.first << "\n" << std::endl;
     }
 
     return os;
 }
 
-std::ostream &
-CodeGenX64::generateFunc(std::ostream &os, Function *func)
+void
+CodeGenX64::generateFunc(Function *func)
 {
     inst_used.clear();
     block_list.clear();
@@ -707,171 +757,548 @@ CodeGenX64::generateFunc(std::ostream &os, Function *func)
         block_map.emplace(bb_ptr.get(), block_list.back().get());
     }
 
-    for (
-        current_block_iter = block_list.rbegin();
-        current_block_iter != block_list.rend();
-        ++current_block_iter
-    ) {
-        auto bb = (*current_block_iter)->ir_block;
-        if (bb->condition) {
-            inst_used[bb->condition]++;
-            inst_result[bb->condition] = nullptr;
-        }
-
-        for (
-            auto inst_iter = bb->inst_list.rbegin();
-            inst_iter != bb->inst_list.rend();
-            ++inst_iter
-        ) {
-            if ((*inst_iter)->isCodeGenRoot() || (inst_used[inst_iter->get()])) {
-                (*inst_iter)->codegen(this);
-            }
-            else {
-                (*inst_iter)->unreferenceOperand();
-            }
-        }
-
-        if (bb->condition) {
-            if (bb->condition->is<SeqInst>()) {
-                if (
-                    current_block_iter == block_list.rbegin() ||
-                    bb->then_block != (*std::prev(current_block_iter))->ir_block
+    for (auto &block_ptr : func->block_list) {
+        for (auto &inst_ptr : block_ptr->inst_list) {
+            if (
+                inst_ptr->is<StoreInst>() ||
+                inst_ptr->is<RetInst>()
                 ) {
-                    (*current_block_iter)->inst_list.emplace_back(new X64::Je(
-                        std::shared_ptr<X64::LabelOperand>(
-                            new X64::LabelOperand(func->getName() + "." + bb->then_block->getName())
-                        )
-                    ));
-
-                    if (
-                        current_block_iter == block_list.rbegin() ||
-                        bb->else_block != (*std::prev(current_block_iter))->ir_block
-                    ) {
-                        (*current_block_iter)->inst_list.emplace_back(new X64::Jmp(
-                            std::shared_ptr<X64::LabelOperand>(
-                                new X64::LabelOperand(func->getName() + "." + bb->else_block->getName())
-                            )
-                        ));
-                    }
-                }
-                else {
-                    (*current_block_iter)->inst_list.emplace_back(new X64::Jne(
-                        std::shared_ptr<X64::LabelOperand>(
-                            new X64::LabelOperand(func->getName() + "." + bb->else_block->getName())
-                        )
-                    ));
-                }
+                inst_ptr->codegen(this);
             }
-            else if (bb->condition->is<SltInst>()) {
-                if (
-                    current_block_iter == block_list.rbegin() ||
-                    bb->then_block != (*std::prev(current_block_iter))->ir_block
-                ) {
-                    (*current_block_iter)->inst_list.emplace_back(new X64::Jl(
-                        std::shared_ptr<X64::LabelOperand>(
-                            new X64::LabelOperand(func->getName() + "." + bb->then_block->getName())
-                        )
-                    ));
-
-                    if (
-                        current_block_iter == block_list.rbegin() ||
-                        bb->else_block != (*std::prev(current_block_iter))->ir_block
-                    ) {
-                        (*current_block_iter)->inst_list.emplace_back(new X64::Jmp(
-                            std::shared_ptr<X64::LabelOperand>(
-                                new X64::LabelOperand(func->getName() + "." + bb->else_block->getName())
-                            )
-                        ));
-                    }
+            else if (inst_ptr->is<CallInst>()) {
+                if (inst_result.find(inst_ptr.get()) == inst_result.end()) {
+                    inst_result.emplace(
+                        inst_ptr.get(),
+                        newValue()
+                    );
                 }
-                else {
-                    (*current_block_iter)->inst_list.emplace_back(new X64::Jge(
-                        std::shared_ptr<X64::LabelOperand>(
-                            new X64::LabelOperand(func->getName() + "." + bb->else_block->getName())
-                        )
-                    ));
-                }
-            }
-            else if (bb->condition->is<SleInst>()) {
-                if (
-                    current_block_iter == block_list.rbegin() ||
-                    bb->then_block != (*std::prev(current_block_iter))->ir_block
-                ) {
-                    (*current_block_iter)->inst_list.emplace_back(new X64::Jle(
-                        std::shared_ptr<X64::LabelOperand>(
-                            new X64::LabelOperand(func->getName() + "." + bb->then_block->getName())
-                        )
-                    ));
-
-                    if (
-                        current_block_iter == block_list.rbegin() ||
-                        bb->else_block != (*std::prev(current_block_iter))->ir_block
-                    ) {
-                        (*current_block_iter)->inst_list.emplace_back(new X64::Jmp(
-                            std::shared_ptr<X64::LabelOperand>(
-                                new X64::LabelOperand(func->getName() + "." + bb->else_block->getName())
-                            )
-                        ));
-                    }
-                }
-                else {
-                    (*current_block_iter)->inst_list.emplace_back(new X64::Jg(
-                        std::shared_ptr<X64::LabelOperand>(
-                            new X64::LabelOperand(func->getName() + "." + bb->else_block->getName())
-                        )
-                    ));
-                }
-            }
-            else {
-                if (
-                    current_block_iter == block_list.rbegin() ||
-                    bb->then_block != (*std::prev(current_block_iter))->ir_block
-                ) {
-                    (*current_block_iter)->inst_list.emplace_back(new X64::Jnz(
-                        std::shared_ptr<X64::LabelOperand>(
-                            new X64::LabelOperand(func->getName() + "." + bb->then_block->getName())
-                        )
-                    ));
-
-                    if (
-                        current_block_iter == block_list.rbegin() ||
-                        bb->else_block != (*std::prev(current_block_iter))->ir_block
-                    ) {
-                        (*current_block_iter)->inst_list.emplace_back(new X64::Jmp(
-                            std::shared_ptr<X64::LabelOperand>(
-                                new X64::LabelOperand(func->getName() + "." + bb->else_block->getName())
-                            )
-                        ));
-                    }
-                }
-                else {
-                    (*current_block_iter)->inst_list.emplace_back(new X64::Jz(
-                        std::shared_ptr<X64::LabelOperand>(
-                            new X64::LabelOperand(func->getName() + "." + bb->else_block->getName())
-                        )
-                    ));
-                }
-            }
-        }
-        else {
-            if (!bb->then_block) {
-                (*current_block_iter)->inst_list.emplace_back(new X64::Ret());
-            }
-            else if (
-                current_block_iter == block_list.rbegin() ||
-                bb->then_block != (*std::prev(current_block_iter))->ir_block
-            ) {
-                (*current_block_iter)->inst_list.emplace_back(new X64::Jmp(
-                    std::shared_ptr<X64::LabelOperand>(
-                        new X64::LabelOperand(func->getName() + "." + bb->then_block->getName())
-                    )
-                ));
+                inst_ptr->codegen(this);
             }
         }
     }
 
-    return os;
+    for (
+        auto block_iter = func->block_list.begin();
+        block_iter != func->block_list.end();
+        ++block_iter
+    ) {
+        auto block_ptr = block_iter->get();
+#define tail_condition_jump(jump_true, jump_false)                              \
+    if (block_ptr->then_block != std::next(block_iter)->get()) {                \
+        block_map[block_ptr]->inst_list.emplace_back(new jump_true(             \
+            std::make_shared<X64::LabelOperand>(                                \
+                func->getName() + "." + block_ptr->then_block->getName()        \
+            )                                                                   \
+        ));                                                                     \
+        if (block_ptr->else_block != std::next(block_iter)->get()) {            \
+            block_map[block_ptr]->inst_list.emplace_back(new X64::Jmp(          \
+                std::make_shared<X64::LabelOperand>(                            \
+                    func->getName() + "." + block_ptr->else_block->getName()    \
+                )                                                               \
+            ));                                                                 \
+        }                                                                       \
+    }                                                                           \
+    else {                                                                      \
+        block_map[block_ptr]->inst_list.emplace_back(new jump_false(            \
+            std::make_shared<X64::LabelOperand>(                                \
+                func->getName() + "." + block_ptr->else_block->getName()        \
+            )                                                                   \
+        ));                                                                     \
+    }
+
+        if (block_ptr->condition) {
+            if (inst_result.find(block_ptr->condition) == inst_result.end()) {
+                inst_result.emplace(block_ptr->condition, newValue());
+                block_ptr->condition->codegen(this);
+                inst_used[block_ptr->condition]++;
+            }
+
+            if (block_ptr->condition->is<SeqInst>()) {
+                tail_condition_jump(X64::Je, X64::Jne)
+            }
+            else if (block_ptr->condition->is<SltInst>()) {
+                tail_condition_jump(X64::Jl, X64::Jge)
+            }
+            else if (block_ptr->condition->is<SleInst>()) {
+                tail_condition_jump(X64::Jle, X64::Jg)
+            }
+            else {
+                block_map[block_ptr]->inst_list.emplace_back(new X64::Cmp(
+                    inst_result.at(block_ptr->condition),
+                    std::shared_ptr<X64::Operand>(new X64::ImmediateOperand(0))
+                ));
+                tail_condition_jump(X64::Jne, X64::Je)
+            }
+        }
+        else {
+            if (block_ptr->then_block) {
+                if (block_ptr->then_block != std::next(block_iter)->get()) {
+                    block_map[block_ptr]->inst_list.emplace_back(new X64::Jmp(
+                        std::make_shared<X64::LabelOperand>(
+                            func->getName() + "." + block_ptr->then_block->getName()
+                        )
+                    ));
+                }
+            }
+            else {
+                block_map[block_ptr]->inst_list.emplace_back(new X64::Ret());
+            }
+        }
+#undef tail_condition_jump
+    }
+    allocateRegisters();
 }
+
+void
+CodeGenX64::registerValueLiveRange(X64::Operand *value, int loop_depth)
+{
+    if (
+        value->is<X64::ValueOperand>() ||
+        value->is<X64::RegisterOperand>()
+    ) {
+        if (live_range.find(value) == live_range.end()) {
+            live_range.emplace(
+                value,
+                LiveRange(inst_list.size(), inst_list.size())
+            );
+        }
+        else {
+            live_range.at(value).second = inst_list.size();
+        }
+        operand_swap_out_cost[value] += MEMORY_OPERATION_COST << (loop_depth * 8);
+    }
+}
+
+void
+CodeGenX64::registerValueLiveRangeOfInst(X64::Instruction *inst, int loop_depth)
+{
+    if (inst->is<X64::Mov>()) {
+        registerValueLiveRange(inst->to<X64::Mov>()->src.get(), loop_depth);
+        registerValueLiveRange(inst->to<X64::Mov>()->dst.get(), loop_depth);
+    }
+    else if (inst->is<X64::Add>()) {
+        registerValueLiveRange(inst->to<X64::Add>()->src.get(), loop_depth);
+        registerValueLiveRange(inst->to<X64::Add>()->dst.get(), loop_depth);
+    }
+    else if (inst->is<X64::And>()) {
+        registerValueLiveRange(inst->to<X64::And>()->src.get(), loop_depth);
+        registerValueLiveRange(inst->to<X64::And>()->dst.get(), loop_depth);
+    }
+    else if (inst->is<X64::Cmp>()) {
+        registerValueLiveRange(inst->to<X64::Cmp>()->left.get(), loop_depth);
+        registerValueLiveRange(inst->to<X64::Cmp>()->right.get(), loop_depth);
+    }
+    else if (inst->is<X64::Imul>()) {
+        registerValueLiveRange(inst->to<X64::Imul>()->src.get(), loop_depth);
+        registerValueLiveRange(inst->to<X64::Imul>()->dst.get(), loop_depth);
+    }
+    else if (inst->is<X64::LeaOffset>()) {
+        registerValueLiveRange(inst->to<X64::LeaOffset>()->dst.get(), loop_depth);
+        registerValueLiveRange(inst->to<X64::LeaOffset>()->base.get(), loop_depth);
+    }
+    else if (inst->is<X64::LeaGlobal>()) {
+        registerValueLiveRange(inst->to<X64::LeaGlobal>()->dst.get(), loop_depth);
+    }
+    else if (inst->is<X64::Neg>()) {
+        registerValueLiveRange(inst->to<X64::Neg>()->dst.get(), loop_depth);
+    }
+    else if (inst->is<X64::Not>()) {
+        registerValueLiveRange(inst->to<X64::Not>()->dst.get(), loop_depth);
+    }
+    else if (inst->is<X64::Or>()) {
+        registerValueLiveRange(inst->to<X64::Or>()->dst.get(), loop_depth);
+        registerValueLiveRange(inst->to<X64::Or>()->src.get(), loop_depth);
+    }
+    else if (inst->is<X64::Pop>()) {
+        registerValueLiveRange(inst->to<X64::Pop>()->dst.get(), loop_depth);
+    }
+    else if (inst->is<X64::Push>()) {
+        registerValueLiveRange(inst->to<X64::Push>()->src.get(), loop_depth);
+    }
+    else if (inst->is<X64::Sal>()) {
+        registerValueLiveRange(inst->to<X64::Sal>()->dst.get(), loop_depth);
+        registerValueLiveRange(inst->to<X64::Sal>()->src.get(), loop_depth);
+    }
+    else if (inst->is<X64::Sar>()) {
+        registerValueLiveRange(inst->to<X64::Sar>()->dst.get(), loop_depth);
+        registerValueLiveRange(inst->to<X64::Sar>()->src.get(), loop_depth);
+    }
+    else if (inst->is<X64::SetE>()) {
+        registerValueLiveRange(inst->to<X64::SetE>()->dst.get(), loop_depth);
+    }
+    else if (inst->is<X64::SetL>()) {
+        registerValueLiveRange(inst->to<X64::SetL>()->dst.get(), loop_depth);
+    }
+    else if (inst->is<X64::SetLe>()) {
+        registerValueLiveRange(inst->to<X64::SetLe>()->dst.get(), loop_depth);
+    }
+    else if (inst->is<X64::Shr>()) {
+        registerValueLiveRange(inst->to<X64::Shr>()->dst.get(), loop_depth);
+        registerValueLiveRange(inst->to<X64::Shr>()->src.get(), loop_depth);
+    }
+    else if (inst->is<X64::Sub>()) {
+        registerValueLiveRange(inst->to<X64::Sub>()->dst.get(), loop_depth);
+        registerValueLiveRange(inst->to<X64::Sub>()->src.get(), loop_depth);
+    }
+    else if (inst->is<X64::Xor>()) {
+        registerValueLiveRange(inst->to<X64::Xor>()->dst.get(), loop_depth);
+        registerValueLiveRange(inst->to<X64::Xor>()->src.get(), loop_depth);
+    }
+}
+
+void
+CodeGenX64::allocateRegisters()
+{
+    std::map<BasicBlock *, Position> block_begin;
+
+    inst_list.clear();
+    live_range.clear();
+    live_range_r.clear();
+    operand_swap_out_cost.clear();
+    for (auto &block_ptr : block_list) {
+        block_begin.emplace(block_ptr->ir_block, inst_list.size());
+
+        inst_list.emplace_back(new X64::Label(current_func->getName() + "." + block_ptr->name));
+        for (auto &inst_ptr : block_ptr->inst_list) {
+            auto inst = inst_ptr.release();
+            registerValueLiveRangeOfInst(inst, block_ptr->ir_block->getDepth());
+            inst_list.emplace_back(inst);
+        }
+
+        if (block_begin.find(block_ptr->ir_block->then_block) != block_begin.end()) {
+            Position dst_block_begin = block_begin[block_ptr->ir_block->then_block];
+            Position src_block_begin = block_begin[block_ptr->ir_block];
+
+            for (auto &range_pair : live_range) {
+                if (range_pair.second.first < dst_block_begin &&
+                    range_pair.second.second > src_block_begin) {
+                    range_pair.second.second = inst_list.size();
+                }
+            }
+        }
+
+        if (block_begin.find(block_ptr->ir_block->else_block) != block_begin.end()) {
+            Position dst_block_begin = block_begin[block_ptr->ir_block->else_block];
+            Position src_block_begin = block_begin[block_ptr->ir_block];
+
+            for (auto &range_pair : live_range) {
+                if (range_pair.second.first < dst_block_begin &&
+                    range_pair.second.second > src_block_begin) {
+                    range_pair.second.second = inst_list.size();
+                }
+            }
+        }
+    }
+
+    for (auto &range_pair : live_range) {
+        live_range_r.emplace(range_pair.second, range_pair.first);
+    }
+
+    current_inst_index = 0;
+    available_registers.clear();
+    for (auto reg = X64::Register::RAX; reg < X64::Register::RBP; reg = X64::next(reg)) {
+        available_registers.emplace(reg);
+    }
+    available_slots.clear();
+    current_mapped_register.clear();
+
+    for (auto &inst_ptr : inst_list) {
+        inst_ptr->registerAllocate(this);
+        ++current_inst_index;
+    }
+}
+
+void
+CodeGenX64::allocateFor(X64::Operand *operand)
+{
+    if (operand->is<X64::ValueOperand>()) {
+        if (!operand->to<X64::ValueOperand>()->actual_operand) {
+            operand->to<X64::ValueOperand>()->actual_operand.reset(allocateAll({}, operand));
+        }
+
+        if (live_range[operand].second == current_inst_index) {
+            assert(operand->to<X64::ValueOperand>()->actual_operand);
+            freeAll(operand->to<X64::ValueOperand>()->actual_operand.get());
+        }
+    }
+    else if (operand->is<X64::RegisterOperand>()) {
+        requestRegister(operand->to<X64::RegisterOperand>()->reg, operand);
+
+        if (live_range[operand].second == current_inst_index) {
+            freeAll(operand);
+        }
+    }
+}
+
+X64::Operand *
+CodeGenX64::allocateAll(const std::set<X64::Register> &skip_list, X64::Operand *operand)
+{
+    if (available_registers.size()) {
+        auto reg = *(available_registers.begin());
+
+        available_registers.erase(available_registers.begin());
+        current_mapped_register.emplace(reg, operand);
+
+        return new X64::RegisterOperand(reg);
+    }
+
+    assert(operand->is<X64::ValueOperand>());
+    X64::Operand *victim = operand;
+    size_t cost = operand_swap_out_cost[operand];
+
+    for (
+        auto reg = X64::Register::RAX;
+        reg < X64::Register::RBP;
+        reg = X64::next(reg)
+    ) {
+        if (skip_list.find(reg) == skip_list.end()) {
+            X64::Operand *current_mapped_operand = current_mapped_register[reg];
+            if (current_mapped_operand->is<X64::RegisterOperand>()) { continue; }
+
+            if (operand_swap_out_cost[current_mapped_operand] < cost) {
+                victim = current_mapped_operand;
+                cost = operand_swap_out_cost[victim];
+            }
+        }
+    }
+
+    assert(victim->is<X64::ValueOperand>());
+    X64::Operand *allocated_operand = nullptr;
+    if (available_slots.size()) {
+        allocated_operand = new X64::StackMemoryOperand(*(available_slots.begin()));
+        available_slots.erase(available_slots.begin());
+    }
+    else {
+        allocated_operand = new X64::StackMemoryOperand(stackSlotOffset(allocateStackSlot(1)));
+    }
+
+    if (victim == operand) {
+        return allocated_operand;
+    }
+    else {
+        auto ret = victim->to<X64::ValueOperand>()->actual_operand.release();
+        victim->to<X64::ValueOperand>()->actual_operand.reset(allocated_operand);
+        return ret;
+    }
+}
+
+void
+CodeGenX64::freeAll(X64::Operand *operand)
+{
+    if (operand->is<X64::RegisterOperand>()) {
+        auto reg = operand->to<X64::RegisterOperand>()->reg;
+        if (reg >= X64::Register::RBP) { return; }
+
+        current_mapped_register.erase(reg);
+        available_registers.emplace(reg);
+        return;
+    }
+    else if (operand->is<X64::StackMemoryOperand>()) {
+        available_slots.emplace(operand->to<X64::StackMemoryOperand>()->offset);
+        return;
+    }
+    // assert(false);
+}
+
+void
+CodeGenX64::requestRegister(X64::Register reg, X64::Operand *operand)
+{
+    if (reg >= X64::Register::RBP) { return; }
+
+    auto victim = current_mapped_register[reg];
+    if (victim == operand) { return; }
+
+    if (available_registers.find(reg) != available_registers.end()) {
+        available_registers.erase(reg);
+        current_mapped_register.emplace(reg, operand);
+        return;
+    }
+
+    assert(victim);
+    assert(victim->is<X64::ValueOperand>());
+    victim->to<X64::ValueOperand>()->actual_operand.reset(allocateAll({reg}, victim));
+    current_mapped_register[reg] = operand;
+}
+
+void
+CodeGenX64::registerAllocate(X64::Label *)
+{ }
+
+void
+CodeGenX64::registerAllocate(X64::Add *inst)
+{
+    allocateFor(inst->dst.get());
+    allocateFor(inst->src.get());
+}
+
+void
+CodeGenX64::registerAllocate(X64::And *inst)
+{
+    allocateFor(inst->dst.get());
+    allocateFor(inst->src.get());
+}
+
+void
+CodeGenX64::registerAllocate(X64::Call *)
+{ }
+
+void
+CodeGenX64::registerAllocate(X64::CallPreserve *)
+{ }
+
+void
+CodeGenX64::registerAllocate(X64::CallRestore *)
+{ }
+
+void
+CodeGenX64::registerAllocate(X64::Cmp *inst)
+{
+    allocateFor(inst->left.get());
+    allocateFor(inst->right.get());
+}
+
+void
+CodeGenX64::registerAllocate(X64::Idiv *)
+{ }
+
+void
+CodeGenX64::registerAllocate(X64::Imod *)
+{ }
+
+void
+CodeGenX64::registerAllocate(X64::Imul *inst)
+{
+    allocateFor(inst->dst.get());
+    allocateFor(inst->src.get());
+}
+
+void
+CodeGenX64::registerAllocate(X64::Jmp *)
+{ }
+
+void
+CodeGenX64::registerAllocate(X64::Je *)
+{ }
+
+void
+CodeGenX64::registerAllocate(X64::Jne *)
+{ }
+
+void
+CodeGenX64::registerAllocate(X64::Jg *)
+{ }
+
+void
+CodeGenX64::registerAllocate(X64::Jge *)
+{ }
+
+void
+CodeGenX64::registerAllocate(X64::Jl *)
+{ }
+
+void
+CodeGenX64::registerAllocate(X64::Jle *)
+{ }
+
+void
+CodeGenX64::registerAllocate(X64::LeaOffset *inst)
+{
+    allocateFor(inst->dst.get());
+    allocateFor(inst->base.get());
+}
+
+void
+CodeGenX64::registerAllocate(X64::LeaGlobal *inst)
+{ allocateFor(inst->dst.get()); }
+
+void
+CodeGenX64::registerAllocate(X64::Mov *inst)
+{
+    allocateFor(inst->dst.get());
+    allocateFor(inst->src.get());
+}
+
+void
+CodeGenX64::registerAllocate(X64::Neg *inst)
+{ allocateFor(inst->dst.get()); }
+
+void
+CodeGenX64::registerAllocate(X64::Not *inst)
+{ allocateFor(inst->dst.get()); }
+
+void
+CodeGenX64::registerAllocate(X64::Or *inst)
+{
+    allocateFor(inst->dst.get());
+    allocateFor(inst->src.get());
+}
+
+void
+CodeGenX64::registerAllocate(X64::Pop *inst)
+{ allocateFor(inst->dst.get()); }
+
+void
+CodeGenX64::registerAllocate(X64::Push *inst)
+{ allocateFor(inst->src.get()); }
+
+void
+CodeGenX64::registerAllocate(X64::Ret *)
+{ }
+
+void
+CodeGenX64::registerAllocate(X64::Sal *inst)
+{
+    allocateFor(inst->dst.get());
+    allocateFor(inst->src.get());
+}
+
+void
+CodeGenX64::registerAllocate(X64::Sar *inst)
+{
+    allocateFor(inst->dst.get());
+    allocateFor(inst->src.get());
+}
+
+void
+CodeGenX64::registerAllocate(X64::SetE *inst)
+{ allocateFor(inst->dst.get()); }
+
+void
+CodeGenX64::registerAllocate(X64::SetL *inst)
+{ allocateFor(inst->dst.get()); }
+
+void
+CodeGenX64::registerAllocate(X64::SetLe *inst)
+{ allocateFor(inst->dst.get()); }
+
+void
+CodeGenX64::registerAllocate(X64::Shr *inst)
+{
+    allocateFor(inst->dst.get());
+    allocateFor(inst->src.get());
+}
+
+void
+CodeGenX64::registerAllocate(X64::Sub *inst)
+{
+    allocateFor(inst->dst.get());
+    allocateFor(inst->src.get());
+}
+
+void
+CodeGenX64::registerAllocate(X64::Xor *inst)
+{
+    allocateFor(inst->dst.get());
+    allocateFor(inst->src.get());
+}
+
+int
+CodeGenX64::allocateStackSlot(int size)
+{ return stack_allocate_counter += size; }
+
+int
+CodeGenX64::stackSlotOffset(int slot)
+{ return slot * -8 - 48; }
 
 int
 CodeGenX64::getAllocInstOffset(AllocaInst *inst)
@@ -880,11 +1307,11 @@ CodeGenX64::getAllocInstOffset(AllocaInst *inst)
         assert(inst->getSpace()->is<UnsignedImmInst>());
         allocate_map.emplace(
             inst,
-            stack_allocate_counter += inst->getSpace()->to<UnsignedImmInst>()->getValue()
+            allocateStackSlot(static_cast<int>(inst->getSpace()->to<UnsignedImmInst>()->getValue()))
         );
     }
 
-    return allocate_map[inst] * 8 - 48;
+    return stackSlotOffset(allocate_map[inst]);
 }
 
 int
@@ -933,47 +1360,47 @@ CodeGenX64::resolveOperand(Instruction *inst)
                     load_inst->getAddress()->to<AllocaInst>()))
             );
         }
-        else {
-            auto operand = newValue();
-            inst_result.emplace(load_inst, operand);
-            inst_used[load_inst]++;
-
-            return operand;
-        }
     }
-    else {
+    if (inst_result.find(inst) == inst_result.end()) {
         auto operand = newValue();
         inst_result.emplace(inst, operand);
         inst_used[inst]++;
-        return operand;
+        inst->codegen(this);
     }
+    return inst_result.at(inst);
 }
 
 std::shared_ptr<X64::Operand>
 CodeGenX64::resolveMemory(Instruction *inst)
 {
     if (inst->is<GlobalInst>()) {
+        inst->unreference();
         return std::shared_ptr<X64::Operand>(new X64::GlobalMemoryOperand(inst->to<GlobalInst>()->getValue()));
     }
     else if (inst->is<ArgInst>()) {
+        inst->unreference();
         return std::shared_ptr<X64::Operand>(
             new X64::StackMemoryOperand(calculateArgumentOffset(static_cast<int>(
                 inst->to<ArgInst>()->getValue())))
         );
     }
     else if (inst->is<AllocaInst>()) {
+        inst->unreference();
         return std::shared_ptr<X64::Operand>(
             new X64::StackMemoryOperand(getAllocInstOffset(
                 inst->to<AllocaInst>()))
         );
     }
     else {
-        auto operand = newValue();
-        inst_result.emplace(inst, operand);
-        inst_used[inst]++;
+        if (inst_result.find(inst) == inst_result.end()) {
+            auto operand = newValue();
+            inst_result.emplace(inst, operand);
+            inst_used[inst]++;
+            inst->codegen(this);
+        }
         return std::shared_ptr<X64::Operand>(
             new X64::OffsetMemoryOperand(
-                operand,
+                inst_result.at(inst),
                 nullptr
             )
         );
@@ -983,14 +1410,18 @@ CodeGenX64::resolveMemory(Instruction *inst)
 void
 CodeGenX64::setOrMoveOperand(Instruction *inst, std::shared_ptr<X64::Operand> dst)
 {
-    if (inst_result.find(inst) != inst_result.end()) {
-        prependInst(new X64::Mov(
+    if (
+        inst_result.find(inst) == inst_result.end() &&
+        inst->getReferencedCount() == 1
+    ) {
+        inst_result.emplace(inst, dst);
+        inst->codegen(this);
+    }
+    else {
+        block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
             dst,
             inst_result.at(inst)
         ));
-    }
-    else {
-        inst_result.emplace(inst, dst);
     }
     inst_used[inst]++;
 }
@@ -1000,10 +1431,6 @@ CodeGenX64::newValue()
 { return std::shared_ptr<X64::Operand>(new X64::ValueOperand()); }
 
 void
-CodeGenX64::prependInst(X64::Instruction *inst)
-{ (*current_block_iter)->inst_list.emplace_front(inst); }
-
-void
 CodeGenX64::gen(Instruction *inst)
 { assert(false); }
 
@@ -1011,7 +1438,7 @@ void
 CodeGenX64::gen(SignedImmInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-    prependInst(new X64::Mov(
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
         inst_result.at(inst),
         std::shared_ptr<X64::Operand>(new X64::ImmediateOperand(inst->getValue()))
     ));
@@ -1021,7 +1448,7 @@ void
 CodeGenX64::gen(UnsignedImmInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-    prependInst(new X64::Mov(
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
         inst_result.at(inst),
         std::shared_ptr<X64::Operand>(new X64::ImmediateOperand(inst->getValue()))
     ));
@@ -1031,7 +1458,7 @@ void
 CodeGenX64::gen(GlobalInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-    prependInst(new X64::LeaGlobal(
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
         inst_result.at(inst),
         std::shared_ptr<X64::Operand>(new X64::GlobalMemoryOperand(inst->getValue()))
     ));
@@ -1041,7 +1468,7 @@ void
 CodeGenX64::gen(ArgInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-    prependInst(new X64::LeaOffset(
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::LeaOffset(
         inst_result.at(inst),
         std::shared_ptr<X64::Operand>(new X64::RegisterOperand(X64::Register::RBP)),
         std::shared_ptr<X64::Operand>(new X64::ImmediateOperand(
@@ -1054,33 +1481,33 @@ void
 CodeGenX64::gen(AddInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-    prependInst(new X64::Add(
+    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Add(
         inst_result.at(inst),
         resolveOperand(inst->getRight())
     ));
-    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
 }
 
 void
 CodeGenX64::gen(SubInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-    prependInst(new X64::Sub(
+    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Sub(
         inst_result.at(inst),
         resolveOperand(inst->getRight())
     ));
-    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
 }
 
 void
 CodeGenX64::gen(MulInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-    prependInst(new X64::Imul(
+    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Imul(
         inst_result.at(inst),
         resolveOperand(inst->getRight())
     ));
-    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
 }
 
 void
@@ -1095,84 +1522,79 @@ void
 CodeGenX64::gen(ShlInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-    prependInst(new X64::Sal(
+    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Sal(
         inst_result.at(inst),
         resolveOperand(inst->getRight())
     ));
-    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
 }
 
 void
 CodeGenX64::gen(ShrInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-    prependInst(new X64::Shr(
+    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Shr(
         inst_result.at(inst),
         resolveOperand(inst->getRight())
     ));
-    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
 }
 
 void
 CodeGenX64::gen(OrInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-    prependInst(new X64::Or(
+    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Or(
         inst_result.at(inst),
         resolveOperand(inst->getRight())
     ));
-    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
 }
 
 void
 CodeGenX64::gen(AndInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-    prependInst(new X64::And(
+    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::And(
         inst_result.at(inst),
         resolveOperand(inst->getRight())
     ));
-    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
 }
 
 void
 CodeGenX64::gen(NorInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-
-    prependInst(new X64::Not(inst_result.at(inst)));
-
+    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
     if (
-        (
-            inst->getRight()->is<SignedImmInst>() &&
-            inst->getRight()->to<SignedImmInst>()->getValue() == 0
-        ) ||
-        (
-            inst->getRight()->is<UnsignedImmInst>() &&
-            inst->getRight()->to<UnsignedImmInst>()->getValue() == 0
-        )
+        (inst->getRight()->is<SignedImmInst>() &&
+            inst->getRight()->to<SignedImmInst>()->getValue() == 0) ||
+        (inst->getRight()->is<UnsignedImmInst>() &&
+            inst->getRight()->to<UnsignedImmInst>()->getValue() == 0)
     ) {
-        setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
         inst->getRight()->unreference();
     }
     else {
-        prependInst(new X64::Or(
+        block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Or(
             inst_result.at(inst),
             resolveOperand(inst->getRight())
         ));
-        setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
     }
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Not(
+        inst_result.at(inst)
+    ));
 }
 
 void
 CodeGenX64::gen(XorInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-    prependInst(new X64::Xor(
+    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Xor(
         inst_result.at(inst),
         resolveOperand(inst->getRight())
     ));
-    setOrMoveOperand(inst->getLeft(), inst_result.at(inst));
 }
 
 void
@@ -1180,15 +1602,19 @@ CodeGenX64::gen(SeqInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
 
-    if (inst_result.at(inst)) {
-        prependInst(new X64::SetE(
-            inst_result.at(inst)
-        ));
-    }
-    prependInst(new X64::Cmp(
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Cmp(
         resolveOperand(inst->getLeft()),
         resolveOperand(inst->getRight())
     ));
+
+    if (
+        inst->getOwnerBlock()->condition != inst ||
+        inst->getReferencedCount() > 1
+    ) {
+        block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::SetE(
+            inst_result.at(inst)
+        ));
+    }
 }
 
 void
@@ -1196,15 +1622,19 @@ CodeGenX64::gen(SltInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
 
-    if (inst_result.at(inst)) {
-        prependInst(new X64::SetE(
-            inst_result.at(inst)
-        ));
-    }
-    prependInst(new X64::Cmp(
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Cmp(
         resolveOperand(inst->getLeft()),
         resolveOperand(inst->getRight())
     ));
+
+    if (
+        inst->getOwnerBlock()->condition != inst ||
+        inst->getReferencedCount() > 1
+        ) {
+        block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::SetL(
+            inst_result.at(inst)
+        ));
+    }
 }
 
 void
@@ -1212,23 +1642,26 @@ CodeGenX64::gen(SleInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
 
-    if (inst_result.at(inst)) {
-        prependInst(new X64::SetE(
-            inst_result.at(inst)
-        ));
-    }
-    prependInst(new X64::Cmp(
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Cmp(
         resolveOperand(inst->getLeft()),
         resolveOperand(inst->getRight())
     ));
+
+    if (
+        inst->getOwnerBlock()->condition != inst ||
+        inst->getReferencedCount() > 1
+        ) {
+        block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::SetLe(
+            inst_result.at(inst)
+        ));
+    }
 }
 
 void
 CodeGenX64::gen(LoadInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-
-    prependInst(new X64::Mov(
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
         inst_result.at(inst),
         resolveMemory(inst->getAddress())
     ));
@@ -1237,7 +1670,7 @@ CodeGenX64::gen(LoadInst *inst)
 void
 CodeGenX64::gen(StoreInst *inst)
 {
-    prependInst(new X64::Mov(
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
         resolveMemory(inst->getAddress()),
         resolveOperand(inst->getValue())
     ));
@@ -1247,8 +1680,7 @@ void
 CodeGenX64::gen(AllocaInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-
-    prependInst(new X64::LeaOffset(
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::LeaOffset(
         inst_result.at(inst),
         std::shared_ptr<X64::Operand>(new X64::RegisterOperand(X64::Register::RBP)),
         std::shared_ptr<X64::Operand>(new X64::ImmediateOperand(getAllocInstOffset(inst)))
@@ -1258,16 +1690,28 @@ CodeGenX64::gen(AllocaInst *inst)
 void
 CodeGenX64::gen(CallInst *inst)
 {
-    auto call_inst = new X64::Call(
-        std::shared_ptr<X64::LabelOperand>(new X64::LabelOperand(inst->getFunction()->getName()))
-    );
+    assert(inst_result.find(inst) != inst_result.end());
 
-    prependInst(new X64::CallRestore(call_inst));
-    prependInst(call_inst);
+    std::shared_ptr<X64::Operand> func;
+    if (inst->getFunction()->is<GlobalInst>()) {
+        func = std::shared_ptr<X64::Operand>(
+            new X64::LabelOperand(inst->getFunction()->to<GlobalInst>()->getValue())
+        );
+    }
+    else {
+        if (inst_result.find(inst->getFunction()) == inst_result.end()) {
+            inst_result.emplace(inst->getFunction(), newValue());
+        }
+        inst->getFunction()->codegen(this);
+        func = inst_result.at(inst->getFunction());
+    }
 
+    auto call_inst = new X64::Call(func);
+
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::CallPreserve(call_inst));
 #define call_set_argument_register(__i, __r)                                    \
     if (inst_result.find(inst->getArgumentByIndex(__i)) != inst_result.end()) { \
-        prependInst(new X64::Mov(                                               \
+        block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(  \
             std::shared_ptr<X64::Operand>(new X64::RegisterOperand(__r)),       \
             inst_result.at(inst->getArgumentByIndex(__i))                       \
         ));                                                                     \
@@ -1277,6 +1721,7 @@ CodeGenX64::gen(CallInst *inst)
             inst->getArgumentByIndex(__i),                                      \
             std::shared_ptr<X64::Operand>(new X64::RegisterOperand(__r))        \
         );                                                                      \
+        inst->getArgumentByIndex(__i)->codegen(this);                           \
     }                                                                           \
     inst_used[inst->getArgumentByIndex(__i)]++
 
@@ -1298,37 +1743,46 @@ CodeGenX64::gen(CallInst *inst)
             if (inst_result.find(inst->getArgumentByIndex(i)) == inst_result.end()) {
                 inst_result[inst->getArgumentByIndex(i)] = newValue();
             }
-            prependInst(new X64::Push(inst_result[inst->getArgumentByIndex(i)]));
+            block_map[inst->getOwnerBlock()]->inst_list.emplace_back(
+                new X64::Push(inst_result[inst->getArgumentByIndex(i)]));
             inst_used[inst->getArgumentByIndex(i)]++;
         }
     } while (false);
-    prependInst(new X64::CallPreserve(call_inst));
-
 #undef call_set_argument_register
-
-    prependInst(new X64::CallPreserve(call_inst));
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(call_inst);
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
+        inst_result.at(inst),
+        std::shared_ptr<X64::Operand>(new X64::RegisterOperand(X64::Register::RAX))
+    ));
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::CallRestore(call_inst));
 }
 
 void
 CodeGenX64::gen(RetInst *inst)
 {
-    (*current_block_iter)->inst_list.clear();   // discard all instruction in current block
-
     // clear possible jumps
-    (*current_block_iter)->ir_block->condition = nullptr;
-    (*current_block_iter)->ir_block->then_block = (*current_block_iter)->ir_block->else_block = nullptr;
+    inst->getOwnerBlock()->condition = nullptr;
+    inst->getOwnerBlock()->then_block = inst->getOwnerBlock()->else_block = nullptr;
 
     // make outer function append the `ret` inst
     if (inst->getReturnValue()) {
         if (inst_result.find(inst->getReturnValue()) != inst_result.end()) {
-            prependInst(new X64::Mov(
+            block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
                 std::shared_ptr<X64::Operand>(new X64::RegisterOperand(X64::Register::RAX)),
                 inst_result.at(inst->getReturnValue())
             ));
         }
         else {
-            inst_result[inst->getReturnValue()] =
-                std::shared_ptr<X64::Operand>(new X64::RegisterOperand(X64::Register::RAX));
+            inst_result.emplace(
+                inst->getReturnValue(),
+                newValue()
+            );
+            inst->getReturnValue()->codegen(this);
+
+            block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
+                std::shared_ptr<X64::Operand>(new X64::RegisterOperand(X64::Register::RAX)),
+                inst_result.at(inst->getReturnValue())
+            ));
         }
     }
     inst_used[inst->getReturnValue()]++;
@@ -1341,7 +1795,8 @@ CodeGenX64::gen(PhiInst *inst)
 
     for (auto &branch : *inst) {
         if (inst_result.find(branch.value) == inst_result.end()) {
-            inst_result[branch.value] = inst_result.at(inst);
+            inst_result.emplace(branch.value, inst_result.at(inst));
+            branch.value->codegen(this);
         }
         else {
             block_map[branch.preceder]->inst_list.emplace_back(new X64::Mov(

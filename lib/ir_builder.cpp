@@ -14,7 +14,7 @@ IRBuilder::BlockBuilder::SignedImmInst(SignedIntegerType *type, intptr_t value, 
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class SignedImmInst(type, value, tempName(name)));
+    product->inst_list.emplace_back(ret = new class SignedImmInst(type, value, product, tempName(name)));
     return ret;
 }
 
@@ -23,7 +23,7 @@ IRBuilder::BlockBuilder::UnsignedImmInst(UnsignedIntegerType *type, uintptr_t va
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class UnsignedImmInst(type, value, tempName(name)));
+    product->inst_list.emplace_back(ret = new class UnsignedImmInst(type, value, product, tempName(name)));
     return ret;
 }
 
@@ -32,7 +32,7 @@ IRBuilder::BlockBuilder::GlobalInst(PointerType *type, std::string value, std::s
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class GlobalInst(type, value, tempName(name)));
+    product->inst_list.emplace_back(ret = new class GlobalInst(type, value, product, tempName(name)));
     return ret;
 }
 
@@ -41,7 +41,7 @@ IRBuilder::BlockBuilder::ArgInst(PointerType *type, intptr_t value, std::string 
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class ArgInst(type, value, tempName(name)));
+    product->inst_list.emplace_back(ret = new class ArgInst(type, value, product, tempName(name)));
     return ret;
 }
 
@@ -50,7 +50,7 @@ IRBuilder::BlockBuilder::AddInst(Type *type, Instruction *left, Instruction *rig
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class AddInst(type, left, right, tempName(name)));
+    product->inst_list.emplace_back(ret = new class AddInst(type, left, right, product, tempName(name)));
     left->reference();
     right->reference();
     return ret;
@@ -61,7 +61,7 @@ IRBuilder::BlockBuilder::SubInst(Type *type, Instruction *left, Instruction *rig
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class SubInst(type, left, right, tempName(name)));
+    product->inst_list.emplace_back(ret = new class SubInst(type, left, right, product, tempName(name)));
     left->reference();
     right->reference();
     return ret;
@@ -72,7 +72,7 @@ IRBuilder::BlockBuilder::MulInst(Type *type, Instruction *left, Instruction *rig
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class MulInst(type, left, right, tempName(name)));
+    product->inst_list.emplace_back(ret = new class MulInst(type, left, right, product, tempName(name)));
     left->reference();
     right->reference();
     return ret;
@@ -83,7 +83,7 @@ IRBuilder::BlockBuilder::DivInst(Type *type, Instruction *left, Instruction *rig
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class DivInst(type, left, right, tempName(name)));
+    product->inst_list.emplace_back(ret = new class DivInst(type, left, right, product, tempName(name)));
     left->reference();
     right->reference();
     return ret;
@@ -94,7 +94,7 @@ IRBuilder::BlockBuilder::ModInst(Type *type, Instruction *left, Instruction *rig
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class ModInst(type, left, right, tempName(name)));
+    product->inst_list.emplace_back(ret = new class ModInst(type, left, right, product, tempName(name)));
     left->reference();
     right->reference();
     return ret;
@@ -105,7 +105,7 @@ IRBuilder::BlockBuilder::ShlInst(Type *type, Instruction *left, Instruction *rig
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class ShlInst(type, left, right, tempName(name)));
+    product->inst_list.emplace_back(ret = new class ShlInst(type, left, right, product, tempName(name)));
     left->reference();
     right->reference();
     return ret;
@@ -116,7 +116,7 @@ IRBuilder::BlockBuilder::ShrInst(Type *type, Instruction *left, Instruction *rig
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class ShrInst(type, left, right, tempName(name)));
+    product->inst_list.emplace_back(ret = new class ShrInst(type, left, right, product, tempName(name)));
     left->reference();
     right->reference();
     return ret;
@@ -127,7 +127,7 @@ IRBuilder::BlockBuilder::OrInst(Type *type, Instruction *left, Instruction *righ
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class OrInst(type, left, right, tempName(name)));
+    product->inst_list.emplace_back(ret = new class OrInst(type, left, right, product, tempName(name)));
     left->reference();
     right->reference();
     return ret;
@@ -138,7 +138,7 @@ IRBuilder::BlockBuilder::AndInst(Type *type, Instruction *left, Instruction *rig
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class AndInst(type, left, right, tempName(name)));
+    product->inst_list.emplace_back(ret = new class AndInst(type, left, right, product, tempName(name)));
     left->reference();
     right->reference();
     return ret;
@@ -149,7 +149,7 @@ IRBuilder::BlockBuilder::NorInst(Type *type, Instruction *left, Instruction *rig
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class NorInst(type, left, right, tempName(name)));
+    product->inst_list.emplace_back(ret = new class NorInst(type, left, right, product, tempName(name)));
     left->reference();
     right->reference();
     return ret;
@@ -160,7 +160,7 @@ IRBuilder::BlockBuilder::XorInst(Type *type, Instruction *left, Instruction *rig
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class XorInst(type, left, right, tempName(name)));
+    product->inst_list.emplace_back(ret = new class XorInst(type, left, right, product, tempName(name)));
     left->reference();
     right->reference();
     return ret;
@@ -171,7 +171,7 @@ IRBuilder::BlockBuilder::SeqInst(Type *type, Instruction *left, Instruction *rig
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class SeqInst(type, left, right, tempName(name)));
+    product->inst_list.emplace_back(ret = new class SeqInst(type, left, right, product, tempName(name)));
     left->reference();
     right->reference();
     return ret;
@@ -182,7 +182,7 @@ IRBuilder::BlockBuilder::SltInst(Type *type, Instruction *left, Instruction *rig
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class SltInst(type, left, right, tempName(name)));
+    product->inst_list.emplace_back(ret = new class SltInst(type, left, right, product, tempName(name)));
     left->reference();
     right->reference();
     return ret;
@@ -193,7 +193,7 @@ IRBuilder::BlockBuilder::SleInst(Type *type, Instruction *left, Instruction *rig
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class SleInst(type, left, right, tempName(name)));
+    product->inst_list.emplace_back(ret = new class SleInst(type, left, right, product, tempName(name)));
     left->reference();
     right->reference();
     return ret;
@@ -204,7 +204,7 @@ IRBuilder::BlockBuilder::LoadInst(Type *type, Instruction *address, std::string 
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class LoadInst(type, address, tempName(name)));
+    product->inst_list.emplace_back(ret = new class LoadInst(type, address, product, tempName(name)));
     address->reference();
     return ret;
 }
@@ -214,7 +214,7 @@ IRBuilder::BlockBuilder::StoreInst(Type *type, Instruction *address, Instruction
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class StoreInst(type, address, value, tempName(name)));
+    product->inst_list.emplace_back(ret = new class StoreInst(type, address, value, product, tempName(name)));
     address->reference();
     value->reference();
     return ret;
@@ -225,7 +225,7 @@ IRBuilder::BlockBuilder::AllocaInst(Type *type, Instruction *space, std::string 
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class AllocaInst(type, space, tempName(name)));
+    product->inst_list.emplace_back(ret = new class AllocaInst(type, space, product, tempName(name)));
     space->reference();
     return ret;
 }
@@ -235,7 +235,7 @@ IRBuilder::BlockBuilder::RetInst(Type *type, Instruction *return_value)
 {
     assert(!productEnded());
     Instruction *ret;
-    product->inst_list.emplace_back(ret = new class RetInst(type, return_value));
+    product->inst_list.emplace_back(ret = new class RetInst(type, product, return_value));
     if (return_value) {
         return_value->reference();
     }

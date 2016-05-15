@@ -41,6 +41,17 @@ TEST(parser_test, logic_and_test)
     // uut->release()->output(std::cout);
 }
 
+TEST(parser_test, logic_or_test)
+{
+    static const char SOURCE[] =
+        "let a = 1 || 2 || 3;";
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
+}
+
 TEST(parser_test, multiple_let_test)
 {
     static const char SOURCE[] =

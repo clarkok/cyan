@@ -2,6 +2,8 @@
 // Created by c on 5/12/16.
 //
 
+#include <fstream>
+
 #include "gtest/gtest.h"
 
 #include "../lib/parse.hpp"
@@ -9,36 +11,66 @@
 
 using namespace cyan;
 
-TEST(codegen_x64_test, basic_test)
-{
-    static const char SOURCE[] =
-        "let a = 1 + 2;";
+#define define_codegen_x64_test(name, source)                           \
+    TEST(codegen_x64_test, name)                                        \
+    {                                                                   \
+        Parser *parser = new Parser(source);                            \
+        ASSERT_TRUE(parser->parse());                                   \
+        CodeGenX64 *uut = new CodeGenX64(parser->release().release());  \
+        std::ofstream ir_out("codegen_x64_" #name ".ir");               \
+        uut->get()->output(ir_out) << std::endl;                        \
+        std::ofstream as_out("codegen_x64_" #name ".s");                \
+        uut->generate(as_out);                                          \
+    }
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+define_codegen_x64_test(basic_test,
+    "let a = 1 + 2;"
+)
 
-    CodeGenX64 *uut = new CodeGenX64(parser->release().release());
-    // uut->get()->output(std::cout) << std::endl;
-    uut->generate(std::cout);
-}
+define_codegen_x64_test(multi_func_test,
+    "let a = 1 + 2;\n"
+    "function main() : i32 {\n"
+    "    let b = 1;\n"
+    "    if (a == 2) {\n"
+    "        return b;\n"
+    "    }\n"
+    "    return a;\n"
+    "}\n"
+)
 
-TEST(codegen_x64_test, multi_func_test)
-{
-    static const char SOURCE[] =
-        "let a = 1 + 2;\n"
-        "function main() : i32 {\n"
-        "    let b = 1;\n"
-        "    if (a == 2) {\n"
-        "        return b;\n"
-        "    }\n"
-        "    return a;\n"
-        "}\n"
-    ;
+define_codegen_x64_test(phi_node_test,
+    "let a = 1 && 2 || 3 && 4;"
+)
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+define_codegen_x64_test(loop_test,
+    "function main() {\n"
+    "    let i = 0;\n"
+    "    while (i < 10) {\n"
+    "        i = i + 1;\n"
+    "    }\n"
+    "}\n"
+)
 
-    CodeGenX64 *uut = new CodeGenX64(parser->release().release());
-    uut->get()->output(std::cout) << std::endl;
-    uut->generate(std::cout);
-}
+define_codegen_x64_test(register_collect_test,
+    "function main() {\n"
+    "    let a = (1 + 2) * (1 - 2);\n"
+    "    let b = 3 * a + 4;\n"
+    "    let c = a + b;\n"
+    "}\n"
+)
+
+define_codegen_x64_test(function_call_test,
+    "function max(a : i32, b : i32) : i32 {\n"
+    "    return a > b ? a : b;\n"
+    "}\n"
+    "function main() : i32 {\n"
+    "    let a = 10;\n"
+    "    let b = 5;\n"
+    "    max(a, b);\n"
+    "    return max(a, b);\n"
+    "}\n"
+)
+
+define_codegen_x64_test(too_many_registers,
+    "let a = 1 * (2 + (3 * (4 + (5 * (6 + (7 * (8 + (9 * (10 + (11 * (12 + (13 * (14 + (15 * 15))))))))))))));"
+)

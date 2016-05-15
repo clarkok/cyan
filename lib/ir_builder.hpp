@@ -32,7 +32,7 @@ public:
             PhiInst::Builder builder;
 
             PhiBuilder(BlockBuilder *owner, Type *type, std::string name)
-                : owner(owner), builder(type, name)
+                : owner(owner), builder(type, owner->product, name)
             { }
 
         public:
@@ -60,7 +60,7 @@ public:
             CallInst::Builder builder;
 
             CallBuilder(BlockBuilder *owner, Type *type, Instruction *function, std::string name)
-                : owner(owner), builder(type, function, name)
+                : owner(owner), builder(type, function, owner->product, name)
             { }
         public:
             CallBuilder(CallBuilder &&builder)

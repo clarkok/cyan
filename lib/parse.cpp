@@ -76,6 +76,27 @@ Parser::_next()
             }
             break;
         }
+        else if (_current() == '|') {
+            if (!_endOfInput(1)) {
+                _forward();
+                if (_current() == '|') {
+                    peaking_token = T_LOGIC_OR;
+                    _forward();
+                }
+                else if (_current() == '=') {
+                    peaking_token = T_OR_ASSIGN;
+                    _forward();
+                }
+                else {
+                    peaking_token = '|';
+                }
+            }
+            else {
+                _forward();
+                peaking_token = '|';
+            }
+            break;
+        }
         else if (_current() == '=') {
             if (!_endOfInput(1)) {
                 _forward();
@@ -1860,7 +1881,7 @@ Parser::parseConditionalExpr()
     parseLogicOrExpr();
 
     if (_peak() == '?') {
-        if (!last_type->is<NumericType>() || !last_type->is<PointerType>()) {
+        if (!last_type->is<NumericType>() && !last_type->is<PointerType>()) {
             error_collector->error(ParseTypeErrorException(
                 location,
                 last_type->to_string() + " cannot be used as condition"
@@ -1878,6 +1899,9 @@ Parser::parseConditionalExpr()
         parseConditionalExpr();
 
         Type *then_part_type = last_type;
+        if (is_left_value) {
+            result_inst = current_block->LoadInst(last_type, result_inst);
+        }
 
         auto result_phi = follow_block->newPhiBuilder(then_part_type);
         result_phi.addBranch(result_inst, current_block->get());
@@ -1890,6 +1914,9 @@ Parser::parseConditionalExpr()
         }
         _next();
         parseConditionalExpr();
+        if (is_left_value) {
+            result_inst = current_block->LoadInst(last_type, result_inst);
+        }
 
         result_phi.addBranch(result_inst, current_block->get());
         current_block->JumpInst(follow_block->get());

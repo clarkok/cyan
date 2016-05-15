@@ -20,12 +20,13 @@ class Instruction
 {
 protected:
     Type *type;
+    BasicBlock *owner_block;
     std::string name;
     size_t referenced_count;
 
 public:
-    Instruction(Type *type, std::string name)
-        : type(type), name(name), referenced_count(0)
+    Instruction(Type *type, BasicBlock *owner_block, std::string name)
+        : type(type), owner_block(owner_block), name(name), referenced_count(0)
     { }
 
     virtual ~Instruction() = default;
@@ -50,6 +51,10 @@ public:
     unreference()
     { --referenced_count; }
 
+    inline BasicBlock *
+    getOwnerBlock() const
+    { return owner_block; }
+
     template <typename T>
     bool is() const
     { return dynamic_cast<const T*>(this) != nullptr; }
@@ -71,8 +76,8 @@ public:
 class ImmediateInst : public Instruction
 {
 public:
-    ImmediateInst(Type *type, std::string name)
-        : Instruction(type, name)
+    ImmediateInst(Type *type, BasicBlock *owner_block, std::string name)
+        : Instruction(type, owner_block, name)
     { }
 };
 
@@ -82,8 +87,13 @@ public:
     protected:                                                          \
         value_type value;                                               \
     public:                                                             \
-        name(type_type *type, value_type value, std::string name)       \
-            : ImmediateInst(type, name), value(value)                   \
+        name(                                                           \
+            type_type *type,                                            \
+            value_type value,                                           \
+            BasicBlock *owner_block,                                    \
+            std::string name                                            \
+        )                                                               \
+            : ImmediateInst(type, owner_block, name), value(value)      \
         { }                                                             \
                                                                         \
         inline value_type                                               \
@@ -108,8 +118,8 @@ class BinaryInst : public Instruction
 protected:
     Instruction *left, *right;
 public:
-    BinaryInst(Type *type, Instruction *left, Instruction *right, std::string name)
-        : Instruction(type, name),
+    BinaryInst(Type *type, Instruction *left, Instruction *right, BasicBlock *owner_block, std::string name)
+        : Instruction(type, owner_block, name),
           left(left),
           right(right)
     { }
@@ -131,8 +141,14 @@ public:
     class _name : public BinaryInst                                                     \
     {                                                                                   \
     public:                                                                             \
-        _name(Type *type, Instruction *left, Instruction *right, std::string name)      \
-            : BinaryInst(type, left, right, name)                                       \
+        _name(                                                                          \
+            Type *type,                                                                 \
+            Instruction *left,                                                          \
+            Instruction *right,                                                         \
+            BasicBlock *owner_block,                                                    \
+            std::string name                                                            \
+        )                                                                               \
+            : BinaryInst(type, left, right, owner_block, name)                          \
         { }                                                                             \
                                                                                         \
         virtual std::string to_string() const;                                          \
@@ -164,8 +180,8 @@ class MemoryInst : public Instruction
 protected:
     Instruction *address;
 public:
-    MemoryInst(Type *type, Instruction *address, std::string name)
-        : Instruction(type, name), address(address)
+    MemoryInst(Type *type, Instruction *address, BasicBlock *owner_block, std::string name)
+        : Instruction(type, owner_block, name), address(address)
     { }
 
     inline Instruction *
@@ -176,8 +192,8 @@ public:
 class LoadInst : public MemoryInst
 {
 public:
-    LoadInst(Type *type, Instruction *address, std::string name)
-        : MemoryInst(type, address, name)
+    LoadInst(Type *type, Instruction *address, BasicBlock *owner_block, std::string name)
+        : MemoryInst(type, address, owner_block, name)
     { }
 
     virtual std::string to_string() const;
@@ -193,8 +209,14 @@ class StoreInst : public MemoryInst
 protected:
     Instruction *value;
 public:
-    StoreInst(Type *type, Instruction *address, Instruction *value, std::string name)
-        : MemoryInst(type, address, name), value(value)
+    StoreInst(
+        Type *type,
+        Instruction *address,
+        Instruction *value,
+        BasicBlock *owner_block,
+        std::string name
+    )
+        : MemoryInst(type, address, owner_block, name), value(value)
     { }
 
     inline Instruction *
@@ -214,8 +236,8 @@ class AllocaInst : public Instruction
 protected:
     Instruction *space;
 public:
-    AllocaInst(Type *type, Instruction *space, std::string name)
-        : Instruction(type, name), space(space)
+    AllocaInst(Type *type, Instruction *space, BasicBlock *owner_block, std::string name)
+        : Instruction(type, owner_block, name), space(space)
     { }
 
     inline Instruction *
@@ -236,8 +258,8 @@ protected:
     Instruction *function;
     std::vector<Instruction *> arguments;
 
-    CallInst(Type *type, Instruction *function, std::string name)
-        : Instruction(type, name), function(function)
+    CallInst(Type *type, Instruction *function, BasicBlock *owner_block, std::string name)
+        : Instruction(type, owner_block, name), function(function)
     { }
 
 public:
@@ -245,8 +267,8 @@ public:
     {
         std::unique_ptr<CallInst> product;
 
-        Builder(Type *type, Instruction *function, std::string name = "")
-            : product(new CallInst(type, function, name))
+        Builder(Type *type, Instruction *function, BasicBlock *owner_block, std::string name = "")
+            : product(new CallInst(type, function, owner_block, name))
         { }
 
         Builder(Builder &&builder)
@@ -307,8 +329,8 @@ class RetInst : public Instruction
 protected:
     Instruction *return_value;
 public:
-    RetInst(Type *type, Instruction *return_value)
-        : Instruction(type, ""), return_value(return_value)
+    RetInst(Type *type, BasicBlock *owner_block, Instruction *return_value)
+        : Instruction(type, owner_block, ""), return_value(return_value)
     { }
 
     inline Instruction *
@@ -340,8 +362,8 @@ public:
 protected:
     std::vector<Branch> branches;
 
-    PhiInst(Type *type, std::string name)
-        : Instruction(type, name)
+    PhiInst(Type *type, BasicBlock *owner_block, std::string name)
+        : Instruction(type, owner_block, name)
     { }
 
 public:
@@ -349,8 +371,8 @@ public:
     {
         std::unique_ptr<PhiInst> product;
 
-        Builder(Type *type, std::string name)
-            : product(new PhiInst(type, name))
+        Builder(Type *type, BasicBlock *owner_block, std::string name)
+            : product(new PhiInst(type, owner_block, name))
         { }
 
         Builder(Builder &&builder)
