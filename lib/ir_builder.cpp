@@ -294,10 +294,10 @@ IRBuilder::BlockBuilder::CallBuilder::commit()
 { return owner->CallInst(builder.release()); }
 
 std::unique_ptr<IRBuilder::BlockBuilder>
-IRBuilder::FunctionBuilder::newBasicBlock(std::string name)
+IRBuilder::FunctionBuilder::newBasicBlock(size_t depth, std::string name)
 {
     product->block_list.emplace_back(
-        std::unique_ptr<BasicBlock>(new BasicBlock(tempName(name)))
+        std::unique_ptr<BasicBlock>(new BasicBlock(tempName(name), static_cast<int>(depth)))
     );
     return std::unique_ptr<BlockBuilder>(new BlockBuilder(owner, this, product->block_list.back().get()));
 }

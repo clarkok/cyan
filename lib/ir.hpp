@@ -19,18 +19,20 @@ struct BasicBlock
 {
     std::list<std::unique_ptr<Instruction> > inst_list;
     std::string name;
-    BasicBlock *dominator;
     Instruction *condition;
     BasicBlock *then_block;
     BasicBlock *else_block;
+
+    BasicBlock *dominator;
+    std::set<BasicBlock *> preceders;
     int depth;
 
     BasicBlock(std::string name, int depth = 0)
         : name(name),
-          dominator(nullptr),
           condition(nullptr),
           then_block(nullptr),
           else_block(nullptr),
+          dominator(nullptr),
           depth(depth)
     { }
 

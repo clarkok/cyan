@@ -239,6 +239,8 @@ Inliner::resortFunctions()
             func_iter->second->callers.size() <= INLINE_CALLER_NR_LIMIT
         ) {
             for (auto &caller : func_iter->second->callers) {
+                if (caller == func_iter->first) { continue; }
+
                 std::list<std::list<std::unique_ptr<Instruction> >::iterator> call_inst_list;
                 std::list<BasicBlock *> owner_block_list;
 

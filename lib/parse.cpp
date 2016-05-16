@@ -658,7 +658,7 @@ void
 Parser::parseGlobalLetStmt()
 {
     current_function = ir_builder->findFunction("_init_");
-    current_block = current_function->newBasicBlock();
+    current_block = current_function->newBasicBlock(loop_stack.size());
 
     assert(_peak() == T_ID);
 
@@ -747,7 +747,7 @@ Parser::parseFunctionDefine()
     }
 
     current_function = ir_builder->newFunction(function_name, last_type->to<FunctionType>());
-    current_block = current_function->newBasicBlock("entry");
+    current_block = current_function->newBasicBlock(loop_stack.size(), "entry");
     forward_symbol->token_value = reinterpret_cast<intptr_t>(current_function->get());
 
     try { parseFunctionBody(); }
@@ -873,7 +873,7 @@ Parser::parseConceptDefine()
                     concept_name + "::" + method_name,
                     last_type->to<FunctionType>()
                 );
-                current_block = current_function->newBasicBlock("entry");
+                current_block = current_function->newBasicBlock(loop_stack.size(), "entry");
                 try {
                     builder.addMethod(method_name, prototype, current_function->get());
                 }
@@ -1226,7 +1226,7 @@ Parser::parseImplDefine()
                 concept_type->getName() + "$" + struct_type->getName() + "::" + method_name,
                 last_type->to<FunctionType>()
             );
-            current_block = current_function->newBasicBlock("entry");
+            current_block = current_function->newBasicBlock(loop_stack.size(), "entry");
             try {
                 casted_struct_type->implement(method_name, prototype, current_function->get());
             }
@@ -1620,8 +1620,8 @@ Parser::parseIfStmt()
     }
     _next();
 
-    auto then_block = current_function->newBasicBlock();
-    auto else_block = current_function->newBasicBlock();
+    auto then_block = current_function->newBasicBlock(loop_stack.size());
+    auto else_block = current_function->newBasicBlock(loop_stack.size());
 
     head_block->BrInst(condition_value, then_block->get(), else_block->get());
 
@@ -1641,7 +1641,7 @@ Parser::parseIfStmt()
         }
     }
 
-    current_block = current_function->newBasicBlock();
+    current_block = current_function->newBasicBlock(loop_stack.size());
     then_block->JumpInst(current_block->get());
     else_block->JumpInst(current_block->get());
 }
@@ -1665,8 +1665,8 @@ Parser::parseWhileStmt()
     }
     _next();
 
-    auto continue_block_b = current_function->newBasicBlock();
-    auto follow_block_b = current_function->newBasicBlock();
+    auto continue_block_b = current_function->newBasicBlock(loop_stack.size());
+    auto follow_block_b = current_function->newBasicBlock(loop_stack.size());
 
     auto continue_block = continue_block_b->get();
     auto follow_block = follow_block_b->get();
@@ -1686,7 +1686,7 @@ Parser::parseWhileStmt()
         condition_value = current_block->LoadInst(last_type, condition_value);
     }
 
-    auto loop_body = current_function->newBasicBlock();
+    auto loop_body = current_function->newBasicBlock(loop_stack.size());
     current_block->BrInst(condition_value, loop_body->get(), follow_block);
     current_block = std::move(loop_body);
 
@@ -1732,7 +1732,7 @@ Parser::parseBreakStmt()
     }
 
     current_block->JumpInst(loop_stack.top().follow_block);
-    current_block = current_function->newBasicBlock();
+    current_block = current_function->newBasicBlock(loop_stack.size());
 
     if (_peak() != ';') {
         throw ParseExpectErrorException(
@@ -1762,7 +1762,7 @@ Parser::parseContinueStmt()
     }
 
     current_block->JumpInst(loop_stack.top().continue_block);
-    current_block = current_function->newBasicBlock();
+    current_block = current_function->newBasicBlock(loop_stack.size());
 
     if (_peak() != ';') {
         throw ParseExpectErrorException(
@@ -1890,9 +1890,9 @@ Parser::parseConditionalExpr()
             ));
         }
 
-        auto then_block = current_function->newBasicBlock();
-        auto else_block = current_function->newBasicBlock();
-        auto follow_block = current_function->newBasicBlock();
+        auto then_block = current_function->newBasicBlock(loop_stack.size());
+        auto else_block = current_function->newBasicBlock(loop_stack.size());
+        auto follow_block = current_function->newBasicBlock(loop_stack.size());
 
         current_block->BrInst(result_inst, then_block->get(), else_block->get());
         current_block.swap(then_block);
@@ -1965,13 +1965,13 @@ Parser::parseLogicOrExpr()
     parseLogicAndExpr();
 
     if (_peak() == T_LOGIC_OR) {
-        auto follow_block = current_function->newBasicBlock();
+        auto follow_block = current_function->newBasicBlock(loop_stack.size());
         auto result_phi = follow_block->newPhiBuilder(last_type);
 
         while (_peak() == T_LOGIC_OR) {
             Type *left_hand_type = last_type;
             auto op = _peak();
-            auto new_block = current_function->newBasicBlock();
+            auto new_block = current_function->newBasicBlock(loop_stack.size());
 
             current_block->BrInst(result_inst, follow_block->get(), new_block->get());
             result_phi.addBranch(result_inst, current_block->get());
@@ -2020,13 +2020,13 @@ Parser::parseLogicAndExpr()
     parseBitwiseOrExpr();
 
     if (_peak() == T_LOGIC_AND) {
-        auto follow_block = current_function->newBasicBlock();
+        auto follow_block = current_function->newBasicBlock(loop_stack.size());
         auto result_phi = follow_block->newPhiBuilder(last_type);
 
         while (_peak() == T_LOGIC_AND)  {
             Type *left_hand_type = last_type;
             auto op = _peak();
-            auto new_block = current_function->newBasicBlock();
+            auto new_block = current_function->newBasicBlock(loop_stack.size());
 
             current_block->BrInst(result_inst, new_block->get(), follow_block->get());
             result_phi.addBranch(result_inst, current_block->get());

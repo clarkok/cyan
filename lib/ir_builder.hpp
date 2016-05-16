@@ -171,7 +171,7 @@ public:
         tempName(std::string name)
         { return name.length() ? name : "BB_" + std::to_string(product->countLocalTemp()); }
 
-        virtual std::unique_ptr<BlockBuilder> newBasicBlock(std::string name = "");
+        virtual std::unique_ptr<BlockBuilder> newBasicBlock(size_t depth, std::string name = "");
 
         friend class IRBuilder;
     };
