@@ -11,7 +11,7 @@
 
 using namespace cyan;
 
-TEST(inliner_test, construct_call_graph)
+TEST(inliner_test, functional_test)
 {
     static const char SOURCE[] =
         "function max(a : i64, b : i64) : i64 {\n"
@@ -34,12 +34,15 @@ TEST(inliner_test, construct_call_graph)
     Parser *parser = new Parser(SOURCE);
     ASSERT_TRUE(parser->parse());
 
+    std::ofstream original_out("inliner_functional_test_original.ir");
     auto ir = parser->release().release();
-    ir->output(std::cout);
+    ir->output(original_out);
 
     Inliner *uut = new Inliner(ir);
 
-    std::ofstream call_graph_out("inliner_construct_call_graph_test.txt");
+    std::ofstream call_graph_out("inliner_functional_test_call_graph.txt");
     uut->outputCallingGraph(call_graph_out);
-    uut->release()->output(std::cout);
+
+    std::ofstream optimized_out("inliner_functional_test_optimized.ir");
+    uut->release()->output(optimized_out);
 }

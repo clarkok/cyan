@@ -219,8 +219,6 @@ Inliner::resortFunctions()
             }
         }
 
-        std::cout << "Trying inline function " << func_iter->first->getName() << std::endl;
-
         if (
             func_iter->first->inst_size() <= INLINE_INST_NR_LIMIT ||
             func_iter->second->callers.size() <= INLINE_CALLER_NR_LIMIT
@@ -228,8 +226,6 @@ Inliner::resortFunctions()
             for (auto &caller : func_iter->second->callers) {
                 std::list<std::list<std::unique_ptr<Instruction> >::iterator> call_inst_list;
                 std::list<BasicBlock *> owner_block_list;
-
-                std::cout << "\tIn caller " << caller->getName() << std::endl;
 
                 for (auto &block_ptr : caller->block_list) {
                     for (
