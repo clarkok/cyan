@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "type.hpp"
+#include "ir.hpp"
 
 namespace cyan {
 
@@ -71,6 +72,10 @@ public:
     virtual void codegen(CodeGen *) = 0;
     virtual void unreferenceOperand() const = 0;
     virtual bool isCodeGenRoot() const = 0;
+    virtual Instruction *
+    clone(BasicBlock *, std::map<Instruction *, Instruction *> &, std::string name = "") const = 0;
+    virtual void resolve(const std::map<Instruction *, Instruction *> &value_map) = 0;
+    virtual void replaceUsage(Instruction *, Instruction *) = 0;
 };
 
 class ImmediateInst : public Instruction
@@ -81,13 +86,13 @@ public:
     { }
 };
 
-#define defineImmInst(name, type_type, value_type)                      \
-    class name : public ImmediateInst                                   \
+#define defineImmInst(_name, type_type, value_type)                     \
+    class _name : public ImmediateInst                                  \
     {                                                                   \
     protected:                                                          \
         value_type value;                                               \
     public:                                                             \
-        name(                                                           \
+        _name(                                                          \
             type_type *type,                                            \
             value_type value,                                           \
             BasicBlock *owner_block,                                    \
@@ -104,6 +109,29 @@ public:
         virtual void codegen(CodeGen *);                                \
         virtual void unreferenceOperand() const;                        \
         virtual bool isCodeGenRoot() const { return false; }            \
+        virtual Instruction *                                           \
+        clone(BasicBlock *block,                                        \
+              std::map<Instruction *, Instruction *> &value_map,        \
+              std::string name = "") const                              \
+        {                                                               \
+            auto ret = new _name(                                       \
+                getType()->to<type_type>(),                             \
+                value,                                                  \
+                block,                                                  \
+                name.size() ? name : getName()                          \
+            );                                                          \
+            value_map.emplace(                                          \
+                const_cast<_name*>(this),                               \
+                const_cast<_name*>(ret)                                 \
+            );                                                          \
+            return ret;                                                 \
+        }                                                               \
+        virtual void                                                    \
+        resolve(const std::map<Instruction *, Instruction *> &)         \
+        { }                                                             \
+        virtual void                                                    \
+        replaceUsage(Instruction *, Instruction *)                      \
+        { }                                                             \
     }
 
 defineImmInst(SignedImmInst, SignedIntegerType, intptr_t);
@@ -135,25 +163,56 @@ public:
     virtual bool
     isCodeGenRoot() const
     { return false; }
+
+    virtual void
+    resolve(const std::map<Instruction *, Instruction *> &value_map)
+    {
+        left = value_map.at(left);
+        right = value_map.at(right);
+    }
 };
 
-#define defineBinaryInst(_name)                                                         \
-    class _name : public BinaryInst                                                     \
-    {                                                                                   \
-    public:                                                                             \
-        _name(                                                                          \
-            Type *type,                                                                 \
-            Instruction *left,                                                          \
-            Instruction *right,                                                         \
-            BasicBlock *owner_block,                                                    \
-            std::string name                                                            \
-        )                                                                               \
-            : BinaryInst(type, left, right, owner_block, name)                          \
-        { }                                                                             \
-                                                                                        \
-        virtual std::string to_string() const;                                          \
-        virtual void codegen(CodeGen *);                                                \
-        virtual void unreferenceOperand() const;                                        \
+#define defineBinaryInst(_name)                                     \
+    class _name : public BinaryInst                                 \
+    {                                                               \
+    public:                                                         \
+        _name(                                                      \
+            Type *type,                                             \
+            Instruction *left,                                      \
+            Instruction *right,                                     \
+            BasicBlock *owner_block,                                \
+            std::string name                                        \
+        )                                                           \
+            : BinaryInst(type, left, right, owner_block, name)      \
+        { }                                                         \
+                                                                    \
+        virtual std::string to_string() const;                      \
+        virtual void codegen(CodeGen *);                            \
+        virtual void unreferenceOperand() const;                    \
+        virtual Instruction *                                       \
+        clone(BasicBlock *block,                                    \
+              std::map<Instruction *, Instruction *> &value_map,    \
+              std::string name = "") const                          \
+        {                                                           \
+            auto ret = new _name(                                   \
+                getType(),                                          \
+                left,                                               \
+                right,                                              \
+                block,                                              \
+                name.size() ? name : getName()                      \
+            );                                                      \
+            value_map.emplace(                                      \
+                const_cast<_name*>(this),                           \
+                const_cast<_name*>(ret)                             \
+            );                                                      \
+            return ret;                                             \
+        }                                                           \
+        virtual void                                                \
+        replaceUsage(Instruction *original, Instruction *replace)   \
+        {                                                           \
+            if (left == original)   { left = replace; }             \
+            if (right == original)  { right = replace; }            \
+        }                                                           \
     }
 
 defineBinaryInst(AddInst);
@@ -202,6 +261,32 @@ public:
     virtual bool
     isCodeGenRoot() const
     { return false; }
+
+    virtual Instruction *
+    clone(BasicBlock *block,
+          std::map<Instruction *, Instruction *> &value_map,
+          std::string name = "") const
+    {
+        auto ret = new LoadInst(
+            getType(),
+            address,
+            block,
+            name.size() ? name : getName()
+        );
+        value_map.emplace(
+            const_cast<LoadInst*>(this),
+            const_cast<LoadInst*>(ret)
+        );
+        return ret;
+    }
+
+    virtual void
+    resolve(const std::map<Instruction *, Instruction *> &value_map)
+    { address = value_map.at(address); }
+
+    virtual void
+    replaceUsage(Instruction *original, Instruction *replace)
+    { if (address == original) { address = replace; } }
 };
 
 class StoreInst : public MemoryInst
@@ -229,6 +314,39 @@ public:
     virtual bool
     isCodeGenRoot() const
     { return true; }
+
+    virtual Instruction *
+    clone(BasicBlock *block,
+          std::map<Instruction *, Instruction *> &value_map,
+          std::string name = "") const
+    {
+        auto ret = new StoreInst(
+            getType(),
+            address,
+            value,
+            block,
+            name.size() ? name : getName()
+        );
+        value_map.emplace(
+            const_cast<StoreInst*>(this),
+            const_cast<StoreInst*>(ret)
+        );
+        return ret;
+    }
+
+    virtual void
+    resolve(const std::map<Instruction *, Instruction *> &value_map)
+    {
+        address = value_map.at(address);
+        value = value_map.at(value);
+    }
+
+    virtual void
+    replaceUsage(Instruction *original, Instruction *replace)
+    {
+        if (address == original)    { address = replace; }
+        if (value == original)      { value = replace; }
+    }
 };
 
 class AllocaInst : public Instruction
@@ -250,6 +368,32 @@ public:
     virtual bool
     isCodeGenRoot() const
     { return false; }
+
+    virtual Instruction *
+    clone(BasicBlock *block,
+          std::map<Instruction *, Instruction *> &value_map,
+          std::string name = "") const
+    {
+        auto ret = new AllocaInst(
+            getType(),
+            space,
+            block,
+            name.size() ? name : getName()
+        );
+        value_map.emplace(
+            const_cast<AllocaInst*>(this),
+            const_cast<AllocaInst*>(ret)
+        );
+        return ret;
+    }
+
+    virtual void
+    resolve(const std::map<Instruction *, Instruction *> &value_map)
+    { space = value_map.at(space); }
+
+    virtual void
+    replaceUsage(Instruction *original, Instruction *replace)
+    { if (space == original) { space = replace; } }
 };
 
 class CallInst : public Instruction
@@ -300,6 +444,14 @@ public:
     { return arguments.end(); }
 
     inline auto
+    begin() const -> decltype(arguments.begin())
+    { return arguments.begin(); }
+
+    inline auto
+    end() const -> decltype(arguments.end())
+    { return arguments.end(); }
+
+    inline auto
     cbegin() const -> decltype(arguments.cbegin())
     { return arguments.cbegin(); }
 
@@ -322,6 +474,51 @@ public:
     virtual bool
     isCodeGenRoot() const
     { return true; }
+
+    virtual Instruction *
+    clone(BasicBlock *block,
+          std::map<Instruction *, Instruction *> &value_map,
+          std::string name = "") const
+    {
+        auto builder = Builder(
+            getType(),
+            getFunction(),
+            block,
+            name.size() ? name : getName()
+        );
+        for (auto &arg : *this) {
+            builder.addArgument(arg);
+        }
+        auto ret = builder.release();
+        value_map.emplace(
+            const_cast<CallInst*>(this),
+            const_cast<CallInst*>(ret)
+        );
+        return ret;
+    }
+
+    virtual void
+    resolve(const std::map<Instruction *, Instruction *> &value_map)
+    {
+        function = value_map.at(function);
+        for (auto &arg : *this) {
+            arg = value_map.at(arg);
+        }
+    }
+
+    virtual void
+    replaceUsage(Instruction *original, Instruction *replace)
+    {
+        if (function == original) {
+            function = replace;
+        }
+
+        for (auto &arg : *this) {
+            if (arg == original) {
+                arg = replace;
+            }
+        }
+    }
 };
 
 class RetInst : public Instruction
@@ -344,6 +541,31 @@ public:
     virtual bool
     isCodeGenRoot() const
     { return true; }
+
+    virtual Instruction *
+    clone(BasicBlock *block,
+          std::map<Instruction *, Instruction *> &value_map,
+          std::string name = "") const
+    {
+        auto ret = new RetInst(
+            getType(),
+            block,
+            return_value
+        );
+        value_map.emplace(
+            const_cast<RetInst*>(this),
+            const_cast<RetInst*>(ret)
+        );
+        return ret;
+    }
+
+    virtual void
+    resolve(const std::map<Instruction *, Instruction *> &value_map)
+    { if (return_value) return_value = value_map.at(return_value); }
+
+    virtual void
+    replaceUsage(Instruction *original, Instruction *replace)
+    { if (return_value == original) { return_value = replace; } }
 };
 
 class PhiInst : public Instruction
@@ -379,9 +601,15 @@ public:
             : product(std::move(builder.product))
         { }
 
+        ~Builder() = default;
+
         inline PhiInst *
         release()
         { return product.release(); }
+
+        inline PhiInst *
+        get() const
+        { return product.get(); }
 
         inline Builder &
         addBranch(Instruction *value, BasicBlock *preceder)
@@ -418,6 +646,59 @@ public:
     virtual bool
     isCodeGenRoot() const
     { return false; }
+
+    virtual Instruction *
+    clone(BasicBlock *, std::map<Instruction *, Instruction *>&, std::string) const
+    { assert(false); }
+
+    Instruction *
+    cloneBranch(
+        std::map<BasicBlock *, BasicBlock *> &block_map,
+        std::map<Instruction *, Instruction *> &value_map,
+        std::string name = ""
+    ) const
+    {
+        auto builder = Builder(
+            getType(),
+            block_map[owner_block],
+            name
+        );
+        for (auto &branch : branches) {
+            builder.addBranch(
+                branch.value,
+                block_map.at(branch.preceder)
+            );
+        }
+        auto ret = builder.release();
+        value_map.emplace(
+            const_cast<PhiInst*>(this),
+            const_cast<PhiInst*>(ret)
+        );
+        return ret;
+    }
+
+    virtual void
+    resolve(const std::map<Instruction *, Instruction *> &value_map)
+    {
+        for (auto &branch : branches) {
+            branch.value = value_map.at(branch.value);
+        }
+    }
+
+    virtual void
+    replaceUsage(Instruction *, Instruction *)
+    { assert(false); }
+
+    void
+    replaceBranch(Instruction *original, Instruction *replace, BasicBlock *block)
+    {
+        for (auto &branch : branches) {
+            if (branch.value == original) {
+                branch.value = replace;
+                branch.preceder = block;
+            }
+        }
+    }
 };
 
 #define inst_foreach(macro) \

@@ -17,7 +17,7 @@ namespace cyan {
 
 struct BasicBlock
 {
-    std::vector<std::unique_ptr<Instruction> > inst_list;
+    std::list<std::unique_ptr<Instruction> > inst_list;
     std::string name;
     BasicBlock *dominator;
     Instruction *condition;
@@ -80,6 +80,29 @@ struct BasicBlock
     getDepth() const
     { return depth; }
 
+    inline BasicBlock *
+    split(std::list<std::unique_ptr<Instruction> >::iterator iterator, std::string name = "")
+    {
+        BasicBlock *new_bb = new BasicBlock(name.size() ? name : getName() + ".split", depth);
+
+        new_bb->inst_list.splice(
+            new_bb->inst_list.begin(),
+            inst_list,
+            std::next(iterator),
+            inst_list.cend()
+        );
+
+        new_bb->condition = condition;
+        new_bb->then_block = then_block;
+        new_bb->else_block = else_block;
+
+        condition = nullptr;
+        then_block = new_bb;
+        else_block = nullptr;
+
+        return new_bb;
+    }
+
     std::ostream &output(std::ostream &os) const;
 };
 
@@ -103,6 +126,14 @@ struct Function
 
     inline auto
     end() -> decltype(block_list.end())
+    { return block_list.end(); }
+
+    inline auto
+    begin() const -> decltype(block_list.begin())
+    { return block_list.begin(); }
+
+    inline auto
+    end() const -> decltype(block_list.end())
     { return block_list.end(); }
 
     inline auto
@@ -137,6 +168,16 @@ struct Function
         }
         local_names.insert(variable_name);
         return variable_name;
+    }
+
+    inline size_t
+    inst_size() const
+    {
+        size_t ret = 0;
+        for (auto &block : *this) {
+            ret += block->size();
+        }
+        return ret;
     }
 
     std::ostream &output(std::ostream &os) const;

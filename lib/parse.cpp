@@ -333,9 +333,11 @@ Parser::_registerReserved()
     primitive("i8", type_pool->getSignedIntegerType(8));
     primitive("i16", type_pool->getSignedIntegerType(16));
     primitive("i32", type_pool->getSignedIntegerType(32));
+    primitive("i64", type_pool->getSignedIntegerType(64));
     primitive("u8", type_pool->getSignedIntegerType(8));
     primitive("u16", type_pool->getSignedIntegerType(16));
     primitive("u32", type_pool->getSignedIntegerType(32));
+    primitive("u64", type_pool->getSignedIntegerType(64));
 
 #undef primitive
 }
@@ -2958,6 +2960,15 @@ Parser::parseUnaryExpr()
                     type_pool->getPointerType(last_type),
                     symbol->token_value
                 );
+
+                if (last_type->is<PointerType>()) {
+                    result_inst = current_block->LoadInst(
+                        last_type,
+                        result_inst
+                    );
+
+                    last_type = last_type->to<PointerType>()->getBaseType();
+                }
             }
             else if (symbol->klass == Symbol::K_VARIABLE) {
                 result_inst = reinterpret_cast<Instruction *>(symbol->token_value);

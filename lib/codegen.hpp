@@ -25,7 +25,9 @@ public:
         : ir(ir)
     { }
 
-    inline IR*
+    virtual ~CodeGen() = default;
+
+    inline IR *
     release()
     { return ir.release(); }
 
@@ -33,7 +35,6 @@ public:
     get() const
     { return ir.get(); }
 
-    virtual ~CodeGen() = default;
     virtual std::ostream &generate(std::ostream &os);
 
 inst_foreach(define_gen)
