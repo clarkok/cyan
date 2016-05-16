@@ -2791,7 +2791,11 @@ Parser::parsePostfixExpr()
         else if (_peak() == '.') {
             last_type = resolveForwardType(last_type);
 
-            if (!last_type->is<StructType>() && !last_type->is<ConceptType>()) {
+            if (
+                !last_type->is<StructType>() &&
+                !last_type->is<ConceptType>() &&
+                !last_type->is<CastedStructType>()
+            ) {
                 throw ParseTypeErrorException(
                     location,
                     "type " + last_type->to_string() + " cannot have members"
@@ -2869,6 +2873,10 @@ Parser::parsePostfixExpr()
                     }
 
                     auto method = casted_struct_type->getMethodByOffset(offset);
+                    result_inst = current_block->LoadInst(
+                        type_pool->getVTableType(casted_struct_type),
+                        result_inst
+                    );
                     last_type = method.prototype;
                     is_left_value = true;
                     result_inst = current_block->AddInst(

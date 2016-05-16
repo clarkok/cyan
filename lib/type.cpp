@@ -2,6 +2,7 @@
 // Created by Clarkok on 16/5/2.
 //
 
+#include <iostream>
 #include "type.hpp"
 
 using namespace cyan;
@@ -220,6 +221,18 @@ std::string
 StructType::to_string() const
 { return "struct " + getName(); }
 
+std::string
+CastedStructType::to_string() const
+{ return "struct " + original_struct->getName() + "::" + base_concept->getName(); }
+
+size_t
+VTableType::size() const
+{ return owner->size(); }
+
+std::string
+VTableType::to_string() const
+{ return "vtable for " + owner->to_string(); }
+
 size_t
 TemplateArgumentType::size() const
 { return 0; }
@@ -311,12 +324,25 @@ TypePool::getMethodType(ConceptType *owner, FunctionType *function)
 CastedStructType *
 TypePool::getCastedStructType(StructType *original_struct, ConceptType *concept)
 {
-    CastedStructType *ret = new CastedStructType(original_struct, concept);
+    auto key = std::pair<StructType *, ConceptType *>(original_struct, concept);
+    if (casted_struct_type.find(key) == casted_struct_type.end()) {
+        CastedStructType *ret = new CastedStructType(original_struct, concept);
+        casted_struct_type.emplace(
+            key,
+            std::unique_ptr<CastedStructType>(ret)
+        );
+    }
+    return casted_struct_type[key].get();
+}
 
-    casted_struct_type.emplace(
-        std::pair<StructType *, ConceptType *>(original_struct, concept),
-        std::unique_ptr<CastedStructType>(ret)
-    );
-
-    return ret;
+VTableType *
+TypePool::getVTableType(ConceptType *owner)
+{
+    if (vtable_type.find(owner) == vtable_type.end()) {
+        vtable_type.emplace(
+            owner,
+            std::unique_ptr<VTableType>(new VTableType(owner))
+        );
+    }
+    return vtable_type[owner].get();
 }

@@ -13,6 +13,7 @@
 #include <exception>
 #include <limits>
 #include <memory>
+#include <functional>
 
 #include "cyan.hpp"
 
@@ -604,6 +605,24 @@ public:
     inline const StructType::Member &
     getMemberByOffset(int offset) const
     { return getOriginalStruct()->getMemberByOffset(offset + offset_base); }
+
+    virtual std::string to_string() const;
+};
+
+class VTableType : public Type
+{
+    ConceptType *owner;
+public:
+    VTableType(ConceptType *owner)
+        : owner(owner)
+    { }
+
+    inline ConceptType *
+    getOwner() const
+    { return owner; }
+
+    virtual size_t size() const;
+    virtual std::string to_string() const;
 };
 
 class TemplateArgumentType : public Type
@@ -773,6 +792,7 @@ class TypePool
     std::map<std::string, std::unique_ptr<StructType> > struct_type;
     std::map<std::pair<StructType *, ConceptType *>, std::unique_ptr<CastedStructType> > casted_struct_type;
     std::vector<std::unique_ptr<TemplateType> > template_type;
+    std::map<ConceptType *, std::unique_ptr<VTableType> > vtable_type;
 public:
     class FunctionTypeBuilder
     {
@@ -917,6 +937,7 @@ public:
     PointerType *getPointerType(Type *base_type);
     MethodType *getMethodType(ConceptType *owner, FunctionType *function);
     CastedStructType *getCastedStructType(StructType *original_struct, ConceptType *concept);
+    VTableType *getVTableType(ConceptType *owner);
 
     inline FunctionTypeBuilder
     getFunctionTypeBuilder()
@@ -933,6 +954,14 @@ public:
     inline TemplateTypeBuilder
     getTemplateTypeBuilder()
     { return TemplateTypeBuilder(this); }
+
+    inline void
+    foreachCastedStructType(std::function<void(CastedStructType *)> callback) const
+    {
+        for (auto &casted_struct_pair : casted_struct_type) {
+            callback(casted_struct_pair.second.get());
+        }
+    }
 };
 
 }

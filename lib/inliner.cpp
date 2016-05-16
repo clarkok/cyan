@@ -42,7 +42,22 @@ Inliner::tryPrecalculateFunction(CallInst *inst)
             return ir->function_table[global_inst->getValue()].get();
         }
     }
-    // TODO method call
+    else if (inst->getFunction()->is<LoadInst>()) {
+        auto load_inst = inst->getFunction()->to<LoadInst>();
+        if (!load_inst->getAddress()->is<AddInst>()) { return nullptr; }
+
+        auto add_inst = load_inst->getAddress()->to<AddInst>();
+        if (!add_inst->getLeft()->getType()->is<VTableType>())  { return nullptr; }
+        if (!add_inst->getRight()->is<SignedImmInst>())         { return nullptr; }
+
+        auto vtable_type = add_inst->getLeft()->getType()->to<VTableType>();
+        if (!vtable_type->getOwner()->is<CastedStructType>())   { return nullptr; }
+
+        auto casted_struct_type = vtable_type->getOwner()->to<CastedStructType>();
+        auto offset = add_inst->getRight()->to<SignedImmInst>()->getValue();
+
+        return casted_struct_type->getMethodByOffset(static_cast<int>(offset)).impl;
+    }
     return nullptr;
 }
 
@@ -267,12 +282,27 @@ Inliner::resortFunctions()
 void
 Inliner::unusedFunctionEliminate()
 {
+    std::set<Function *> used_func(
+        {
+            ir->function_table["main"].get(),
+            ir->function_table["_init_"].get()
+        }
+    );
+
+    ir->type_pool->foreachCastedStructType(
+        [&used_func](CastedStructType *casted) {
+            for (auto &member : *casted) {
+                assert(member.impl);
+                used_func.emplace(member.impl);
+            }
+        }
+    );
+
     for (auto &func_pair : calling_graph) {
-        if (func_pair.first->getName() == "__init__" ||
-            func_pair.first->getName() == "main")
-        { continue; }
-        if (!func_pair.second->callers.size()) {
-            ir->function_table.erase(func_pair.first->getName());
+        if (used_func.find(func_pair.first) == used_func.end()) {
+            if (!func_pair.second->callers.size()) {
+                ir->function_table.erase(func_pair.first->getName());
+            }
         }
     }
 }

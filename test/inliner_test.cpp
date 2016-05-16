@@ -11,7 +11,7 @@
 
 using namespace cyan;
 
-TEST(inliner_test, functional_test)
+TEST(inliner_test, function_test)
 {
     static const char SOURCE[] =
         "function max(a : i64, b : i64) : i64 {\n"
@@ -34,15 +34,50 @@ TEST(inliner_test, functional_test)
     Parser *parser = new Parser(SOURCE);
     ASSERT_TRUE(parser->parse());
 
-    std::ofstream original_out("inliner_functional_test_original.ir");
+    std::ofstream original_out("inliner_function_test_original.ir");
     auto ir = parser->release().release();
     ir->output(original_out);
 
     Inliner *uut = new Inliner(ir);
 
-    std::ofstream call_graph_out("inliner_functional_test_call_graph.txt");
+    std::ofstream call_graph_out("inliner_function_test_call_graph.txt");
     uut->outputCallingGraph(call_graph_out);
 
-    std::ofstream optimized_out("inliner_functional_test_optimized.ir");
+    std::ofstream optimized_out("inliner_function_test_optimized.ir");
+    uut->release()->output(optimized_out);
+}
+
+TEST(inliner_test, method_test)
+{
+    static const char SOURCE[] =
+        "concept Person {\n"
+        "    function getAge() : i32;\n"
+        "}\n"
+        "struct Student {\n"
+        "    age : i32\n"
+        "}\n"
+        "impl Student : Person {\n"
+        "    function getAge() : i32{\n"
+        "        return this.age;\n"
+        "    }\n"
+        "}\n"
+        "function main(p : Student) {\n"
+        "    p.Person.getAge();\n"
+        "}\n"
+    ;
+
+    Parser *parser = new Parser(SOURCE);
+    ASSERT_TRUE(parser->parse());
+
+    std::ofstream original_out("inliner_method_test_original.ir");
+    auto ir = parser->release().release();
+    ir->output(original_out);
+
+    Inliner *uut = new Inliner(ir);
+
+    std::ofstream call_graph_out("inliner_method_test_call_graph.txt");
+    uut->outputCallingGraph(call_graph_out);
+
+    std::ofstream optimized_out("inliner_method_test_optimized.ir");
     uut->release()->output(optimized_out);
 }
