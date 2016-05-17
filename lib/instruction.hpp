@@ -40,6 +40,10 @@ public:
     getName() const
     { return name; }
 
+    inline std::string
+    setName(std::string name)
+    { return this->name = name; }
+
     inline size_t
     getReferencedCount() const
     { return referenced_count; }
@@ -76,6 +80,7 @@ public:
     clone(BasicBlock *, std::map<Instruction *, Instruction *> &, std::string name = "") const = 0;
     virtual void resolve(const std::map<Instruction *, Instruction *> &value_map) = 0;
     virtual void replaceUsage(Instruction *, Instruction *) = 0;
+    virtual bool usedInstruction(Instruction *) const = 0;
 };
 
 class ImmediateInst : public Instruction
@@ -132,6 +137,9 @@ public:
         virtual void                                                    \
         replaceUsage(Instruction *, Instruction *)                      \
         { }                                                             \
+        virtual bool                                                    \
+        usedInstruction(Instruction *) const                            \
+        { return false; }                                               \
     }
 
 defineImmInst(SignedImmInst, SignedIntegerType, intptr_t);
@@ -167,9 +175,17 @@ public:
     virtual void
     resolve(const std::map<Instruction *, Instruction *> &value_map)
     {
-        left = value_map.at(left);
-        right = value_map.at(right);
+        if (value_map.find(left) != value_map.end()) {
+            left = value_map.at(left);
+        }
+        if (value_map.find(right) != value_map.end()) {
+            right = value_map.at(right);
+        }
     }
+
+    virtual bool
+    usedInstruction(Instruction *inst) const
+    { return left == inst || right == inst; }
 };
 
 #define defineBinaryInst(_name)                                     \
@@ -282,11 +298,19 @@ public:
 
     virtual void
     resolve(const std::map<Instruction *, Instruction *> &value_map)
-    { address = value_map.at(address); }
+    {
+        if (value_map.find(address) != value_map.end()) {
+            address = value_map.at(address);
+        }
+    }
 
     virtual void
     replaceUsage(Instruction *original, Instruction *replace)
     { if (address == original) { address = replace; } }
+
+    virtual bool
+    usedInstruction(Instruction *inst) const
+    { return address == inst; }
 };
 
 class StoreInst : public MemoryInst
@@ -337,8 +361,12 @@ public:
     virtual void
     resolve(const std::map<Instruction *, Instruction *> &value_map)
     {
-        address = value_map.at(address);
-        value = value_map.at(value);
+        if (value_map.find(address) != value_map.end()) {
+            address = value_map.at(address);
+        }
+        if (value_map.find(value) != value_map.end()) {
+            value = value_map.at(value);
+        }
     }
 
     virtual void
@@ -347,6 +375,10 @@ public:
         if (address == original)    { address = replace; }
         if (value == original)      { value = replace; }
     }
+
+    virtual bool
+    usedInstruction(Instruction *inst) const
+    { return address == inst || value == inst; }
 };
 
 class AllocaInst : public Instruction
@@ -389,11 +421,19 @@ public:
 
     virtual void
     resolve(const std::map<Instruction *, Instruction *> &value_map)
-    { space = value_map.at(space); }
+    {
+        if (value_map.find(space) != value_map.end()) {
+            space = value_map.at(space);
+        }
+    }
 
     virtual void
     replaceUsage(Instruction *original, Instruction *replace)
     { if (space == original) { space = replace; } }
+
+    virtual bool
+    usedInstruction(Instruction *inst) const
+    { return space == inst; }
 };
 
 class CallInst : public Instruction
@@ -500,9 +540,14 @@ public:
     virtual void
     resolve(const std::map<Instruction *, Instruction *> &value_map)
     {
-        function = value_map.at(function);
+        if (value_map.find(function) != value_map.end()) {
+            function = value_map.at(function);
+        }
+
         for (auto &arg : *this) {
-            arg = value_map.at(arg);
+            if (value_map.find(arg) != value_map.end()) {
+                arg = value_map.at(arg);
+            }
         }
     }
 
@@ -518,6 +563,16 @@ public:
                 arg = replace;
             }
         }
+    }
+
+    virtual bool
+    usedInstruction(Instruction *inst) const
+    {
+        if (function == inst) { return true; }
+        for (auto &arg : *this) {
+            if (arg == inst) { return true; }
+        }
+        return false;
     }
 };
 
@@ -561,11 +616,19 @@ public:
 
     virtual void
     resolve(const std::map<Instruction *, Instruction *> &value_map)
-    { if (return_value) return_value = value_map.at(return_value); }
+    {
+        if (value_map.find(return_value) != value_map.end()) {
+            return_value = value_map.at(return_value);
+        }
+    }
 
     virtual void
     replaceUsage(Instruction *original, Instruction *replace)
     { if (return_value == original) { return_value = replace; } }
+
+    virtual bool
+    usedInstruction(Instruction *inst) const
+    { return return_value == inst; }
 };
 
 class PhiInst : public Instruction
@@ -681,7 +744,9 @@ public:
     resolve(const std::map<Instruction *, Instruction *> &value_map)
     {
         for (auto &branch : branches) {
-            branch.value = value_map.at(branch.value);
+            if (value_map.find(branch.value) != value_map.end()) {
+                branch.value = value_map.at(branch.value);
+            }
         }
     }
 
@@ -698,6 +763,15 @@ public:
                 branch.preceder = block;
             }
         }
+    }
+
+    virtual bool
+    usedInstruction(Instruction *inst) const
+    {
+        for (auto &branch : branches) {
+            if (branch.value == inst) return true;
+        }
+        return false;
     }
 };
 

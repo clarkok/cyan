@@ -355,6 +355,7 @@ Parser::checkVariableDefined(std::string name)
         throw ParseRedefinedErrorException(location, name, symbol->location);
     }
     else if (
+        symbol->klass == Symbol::K_GLOBAL ||
         symbol->klass == Symbol::K_VARIABLE ||
         symbol->klass == Symbol::K_ARGUMENT ||
         symbol->klass == Symbol::K_FUNCTION

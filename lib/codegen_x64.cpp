@@ -70,6 +70,7 @@ to_string(Register reg)
     }
 
 #undef to_string_case
+    assert(false);
 }
 
 struct Operand
