@@ -1393,6 +1393,9 @@ Parser::parseStatement()
 {
     if (_peak() == T_ID) {
         auto symbol = symbol_table->lookup(peaking_string);
+        if (!symbol) {
+            throw ParseExpectErrorException(location, "statement", _tokenLiteral());
+        }
         if (symbol->klass == Symbol::K_RESERVED) {
             switch (symbol->token_value) {
                 case R_LET:

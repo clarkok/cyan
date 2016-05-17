@@ -23,7 +23,7 @@ TEST(dep_analyzer_test, basic_test)
     auto ir = parser->release().release();
     ir->output(original_out);
 
-    std::ofstream analyzed_out("dep_analyzer_basic_test_analyze_result.ir");
+    std::ofstream analyzed_out("dep_analyzer_basic_test_analyze_result.txt");
     DepAnalyzer(ir).outputResult(analyzed_out);
 }
 
@@ -46,6 +46,6 @@ TEST(dep_analyzer_test, loop_test)
     auto ir = parser->release().release();
     ir->output(original_out);
 
-    std::ofstream analyzed_out("dep_analyzer_loop_test_analyze_result.ir");
+    std::ofstream analyzed_out("dep_analyzer_loop_test_analyze_result.txt");
     DepAnalyzer(ir).outputResult(analyzed_out);
 }

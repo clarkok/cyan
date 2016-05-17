@@ -25,6 +25,7 @@ struct BasicBlock
 
     BasicBlock *dominator;
     std::set<BasicBlock *> preceders;
+    BasicBlock *loop_header;
     int depth;
 
     BasicBlock(std::string name, int depth = 0)
@@ -33,6 +34,7 @@ struct BasicBlock
           then_block(nullptr),
           else_block(nullptr),
           dominator(nullptr),
+          loop_header(nullptr),
           depth(depth)
     { }
 

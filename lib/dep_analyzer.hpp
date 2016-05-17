@@ -24,6 +24,10 @@ public:
     {
         for (auto &func : ir->function_table) {
             if (func.second->block_list.size()) {
+                for (auto &block_ptr : func.second->block_list) {
+                    block_ptr->dominator = nullptr;
+                    block_ptr->preceders.clear();
+                }
                 scanned.clear();
                 scanDep(func.second->block_list.front().get());
             }
