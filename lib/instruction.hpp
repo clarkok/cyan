@@ -60,6 +60,10 @@ public:
     getOwnerBlock() const
     { return owner_block; }
 
+    inline BasicBlock *
+    setOwnerBlock(BasicBlock *owner_block)
+    { return this->owner_block = owner_block; }
+
     template <typename T>
     bool is() const
     { return dynamic_cast<const T*>(this) != nullptr; }
@@ -188,7 +192,56 @@ public:
     { return left == inst || right == inst; }
 };
 
-#define defineBinaryInst(_name)                                     \
+#define defineBinaryInstSwapable(_name)                             \
+    class _name : public BinaryInst                                 \
+    {                                                               \
+    public:                                                         \
+        _name(                                                      \
+            Type *type,                                             \
+            Instruction *left,                                      \
+            Instruction *right,                                     \
+            BasicBlock *owner_block,                                \
+            std::string name                                        \
+        )                                                           \
+            : BinaryInst(                                           \
+                type,                                               \
+                std::max(left, right),                              \
+                std::min(left, right),                              \
+                owner_block,                                        \
+                name                                                \
+            )                                                       \
+        { }                                                         \
+                                                                    \
+        virtual std::string to_string() const;                      \
+        virtual void codegen(CodeGen *);                            \
+        virtual void unreferenceOperand() const;                    \
+        virtual Instruction *                                       \
+        clone(BasicBlock *block,                                    \
+              std::map<Instruction *, Instruction *> &value_map,    \
+              std::string name = "") const                          \
+        {                                                           \
+            auto ret = new _name(                                   \
+                getType(),                                          \
+                left,                                               \
+                right,                                              \
+                block,                                              \
+                name.size() ? name : getName()                      \
+            );                                                      \
+            value_map.emplace(                                      \
+                const_cast<_name*>(this),                           \
+                const_cast<_name*>(ret)                             \
+            );                                                      \
+            return ret;                                             \
+        }                                                           \
+        virtual void                                                \
+        replaceUsage(Instruction *original, Instruction *replace)   \
+        {                                                           \
+            if (left == original)   { left = replace; }             \
+            if (right == original)  { right = replace; }            \
+        }                                                           \
+    }
+
+#define defineBinaryInstUnswapable(_name)                           \
     class _name : public BinaryInst                                 \
     {                                                               \
     public:                                                         \
@@ -231,22 +284,22 @@ public:
         }                                                           \
     }
 
-defineBinaryInst(AddInst);
-defineBinaryInst(SubInst);
-defineBinaryInst(MulInst);
-defineBinaryInst(DivInst);
-defineBinaryInst(ModInst);
+defineBinaryInstSwapable    (AddInst);
+defineBinaryInstUnswapable  (SubInst);
+defineBinaryInstSwapable    (MulInst);
+defineBinaryInstUnswapable  (DivInst);
+defineBinaryInstUnswapable  (ModInst);
 
-defineBinaryInst(ShlInst);
-defineBinaryInst(ShrInst);
-defineBinaryInst(OrInst);
-defineBinaryInst(AndInst);
-defineBinaryInst(NorInst);
-defineBinaryInst(XorInst);
+defineBinaryInstUnswapable  (ShlInst);
+defineBinaryInstUnswapable  (ShrInst);
+defineBinaryInstSwapable    (OrInst);
+defineBinaryInstSwapable    (AndInst);
+defineBinaryInstSwapable    (NorInst);
+defineBinaryInstSwapable    (XorInst);
 
-defineBinaryInst(SeqInst);
-defineBinaryInst(SltInst);
-defineBinaryInst(SleInst);
+defineBinaryInstSwapable    (SeqInst);
+defineBinaryInstUnswapable  (SltInst);
+defineBinaryInstUnswapable  (SleInst);
 
 #undef defineBinaryInst
 

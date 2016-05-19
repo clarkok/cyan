@@ -85,7 +85,7 @@ public:
             : owner(builder.owner), product(builder.product)
         { }
 
-        virtual ~BlockBuilder() = default;
+        ~BlockBuilder() = default;
 
         inline std::string
         tempName(std::string name)
@@ -111,41 +111,41 @@ public:
         newCallBuilder(Type *type, Instruction *function, std::string name = "")
         { return CallBuilder(this, type, function, tempName(name)); }
 
-        virtual Instruction *SignedImmInst(SignedIntegerType *type, intptr_t value, std::string name = "");
-        virtual Instruction *UnsignedImmInst(UnsignedIntegerType *type, uintptr_t value, std::string name = "");
-        virtual Instruction *GlobalInst(PointerType *type, std::string value, std::string name = "");
-        virtual Instruction *ArgInst(PointerType *type, intptr_t value, std::string name = "");
+        Instruction *SignedImmInst(SignedIntegerType *type, intptr_t value, std::string name = "");
+        Instruction *UnsignedImmInst(UnsignedIntegerType *type, uintptr_t value, std::string name = "");
+        Instruction *GlobalInst(PointerType *type, std::string value, std::string name = "");
+        Instruction *ArgInst(PointerType *type, intptr_t value, std::string name = "");
 
-        virtual Instruction *AddInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
-        virtual Instruction *SubInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
-        virtual Instruction *MulInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
-        virtual Instruction *DivInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
-        virtual Instruction *ModInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        Instruction *AddInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        Instruction *SubInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        Instruction *MulInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        Instruction *DivInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        Instruction *ModInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
 
-        virtual Instruction *ShlInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
-        virtual Instruction *ShrInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
-        virtual Instruction *OrInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
-        virtual Instruction *AndInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
-        virtual Instruction *NorInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
-        virtual Instruction *XorInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        Instruction *ShlInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        Instruction *ShrInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        Instruction *OrInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        Instruction *AndInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        Instruction *NorInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        Instruction *XorInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
 
-        virtual Instruction *SeqInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
-        virtual Instruction *SltInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
-        virtual Instruction *SleInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        Instruction *SeqInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        Instruction *SltInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
+        Instruction *SleInst(Type *type, Instruction *left, Instruction *right, std::string name = "");
 
-        virtual Instruction *LoadInst(Type *type, Instruction *address, std::string name = "");
-        virtual Instruction *StoreInst(Type *type, Instruction *address, Instruction *value, std::string name = "");
-        virtual Instruction *AllocaInst(Type *type, Instruction *space, std::string name = "");
+        Instruction *LoadInst(Type *type, Instruction *address, std::string name = "");
+        Instruction *StoreInst(Type *type, Instruction *address, Instruction *value, std::string name = "");
+        Instruction *AllocaInst(Type *type, Instruction *space, std::string name = "");
 
-        virtual Instruction *RetInst(Type *type, Instruction *return_value);
+        Instruction *RetInst(Type *type, Instruction *return_value);
 
-        virtual void JumpInst(BasicBlock *block);
-        virtual void BrInst(Instruction *condition, BasicBlock *then_block, BasicBlock *else_block);
+        void JumpInst(BasicBlock *block);
+        void BrInst(Instruction *condition, BasicBlock *then_block, BasicBlock *else_block);
 
         friend class FunctionBuilder;
     protected:
-        virtual Instruction *CallInst(class CallInst *inst);
-        virtual Instruction *PhiInst(class PhiInst *inst);
+        Instruction *CallInst(class CallInst *inst);
+        Instruction *PhiInst(class PhiInst *inst);
     };
 
     class FunctionBuilder
@@ -161,7 +161,7 @@ public:
             : owner(builder.owner), product(builder.product)
         { }
 
-        virtual ~FunctionBuilder() = default;
+        ~FunctionBuilder() = default;
 
         inline Function *
         get() const
@@ -171,7 +171,7 @@ public:
         tempName(std::string name)
         { return name.length() ? name : "BB_" + std::to_string(product->countLocalTemp()); }
 
-        virtual std::unique_ptr<BlockBuilder> newBasicBlock(size_t depth, std::string name = "");
+        std::unique_ptr<BlockBuilder> newBasicBlock(size_t depth, std::string name = "");
 
         friend class IRBuilder;
     };
@@ -180,8 +180,8 @@ public:
         : product(new IR())
     { }
 
-    virtual std::unique_ptr<FunctionBuilder> newFunction(std::string name, FunctionType *prototype);
-    virtual std::unique_ptr<FunctionBuilder> findFunction(std::string name);
+    std::unique_ptr<FunctionBuilder> newFunction(std::string name, FunctionType *prototype);
+    std::unique_ptr<FunctionBuilder> findFunction(std::string name);
 
     inline IR *
     release(TypePool *type_pool)
