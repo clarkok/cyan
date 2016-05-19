@@ -10,6 +10,15 @@ std::ostream &
 BasicBlock::output(std::ostream &os) const
 {
     os << getName() << ":" << std::endl;
+    os << "{\n"
+       << "\tdominator: " << (dominator ? dominator->getName() : "(null)") << ",\n"
+       << "\tdepth: " << depth << ",\n"
+       << "\tloop_header: " << (loop_header ? loop_header->getName() : "(null)") << ",\n"
+       << "\tpreceders: [";
+    for (auto &preceder : preceders) {
+        os << preceder->getName() << ",";
+    }
+    os << "]\n}\n";
 
     for (auto &inst : inst_list) {
         os << "\t" << inst->to_string() << std::endl;

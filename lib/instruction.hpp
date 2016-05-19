@@ -6,6 +6,7 @@
 #define CYAN_INSTRUCTION_HPP
 
 #include <vector>
+#include <algorithm>
 
 #include "type.hpp"
 #include "ir.hpp"
@@ -834,6 +835,21 @@ public:
     inline auto
     branches_size() const -> decltype(branches.size())
     { return branches.size(); }
+
+    inline void
+    remove_branch(BasicBlock *preceder)
+    {
+        branches.erase(
+            std::remove_if(
+                branches.begin(),
+                branches.end(),
+                [preceder](const Branch &branch) {
+                    return branch.preceder == preceder;
+                }
+            ),
+            branches.end()
+        );
+    }
 
     virtual std::string to_string() const;
     virtual void codegen(CodeGen *);

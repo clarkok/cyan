@@ -25,6 +25,7 @@ public:
         for (auto &func : ir->function_table) {
             if (func.second->block_list.size()) {
                 for (auto &block_ptr : func.second->block_list) {
+                    block_ptr->depth = 0;
                     block_ptr->dominator = nullptr;
                     block_ptr->preceders.clear();
                 }

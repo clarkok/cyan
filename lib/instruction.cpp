@@ -95,12 +95,13 @@ PhiInst::to_string() const
 {
     std::string ret(value_header("phi"));
 
-    for (auto iter = cbegin(); iter != cend(); ++iter) {
-        ret += "[" + iter->preceder->getName() + "," + iter->value->getName() + "], ";
+    if (branches_size()) {
+        for (auto iter = cbegin(); iter != cend(); ++iter) {
+            ret += "[" + iter->preceder->getName() + "," + iter->value->getName() + "], ";
+        }
+        ret.pop_back();
+        ret.pop_back();
     }
-
-    ret.pop_back();
-    ret.pop_back();
 
     return ret;
 }

@@ -53,5 +53,8 @@ PhiEliminator::eliminateInFunction(Function *func)
         for (auto &inst_ptr : block_ptr->inst_list) {
             inst_ptr->resolve(value_map);
         }
+        if (value_map.find(block_ptr->condition) != value_map.end()) {
+            block_ptr->condition = value_map.at(block_ptr->condition);
+        }
     }
 }

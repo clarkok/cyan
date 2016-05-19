@@ -10,8 +10,19 @@ void
 InstRewriter::rewriteFunction(Function *func)
 {
     block_result.clear();
+    value_map.clear();
+    imm_map.clear();
     for (auto &block_ptr : func->block_list) {
         rewriteBlock(func, block_ptr.get());
+    }
+
+    for (auto &block_ptr : func->block_list) {
+        for (auto &inst_ptr : block_ptr->inst_list) {
+            inst_ptr->resolve(value_map);
+        }
+        if (value_map.find(block_ptr->condition) != value_map.end()) {
+            block_ptr->condition = value_map.at(block_ptr->condition);
+        }
     }
 }
 
@@ -101,12 +112,12 @@ InstRewriter::rewriteBlock(Function *func, BasicBlock *block)
                 auto loop_header = binary_inst->getOwnerBlock()->loop_header;
                 while (
                     loop_header->getDepth() > 1 &&
-                    binary_inst->getLeft()->getOwnerBlock()->loop_header != 
+                    binary_inst->getLeft()->getOwnerBlock()->loop_header !=
                         loop_header->dominator->loop_header &&
                     binary_inst->getRight()->getOwnerBlock()->loop_header !=
                         loop_header->dominator->loop_header
                 ) {
-                    loop_header = loop_header->loop_header;
+                    loop_header = loop_header->dominator->loop_header;
                 }
                 assert(loop_header);
                 auto dst = loop_header->dominator;

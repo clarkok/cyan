@@ -34,20 +34,17 @@ DepAnalyzer::scanDep(BasicBlock *block)
     scanned.emplace(block);
 
     if (block->condition) {
-        if (block->then_block) {
-            setPreceder(block->then_block, block);
-            scanDep(block->then_block);
-        }
-        if (block->else_block) {
-            setPreceder(block->else_block, block);
-            scanDep(block->else_block);
-        }
+        assert(block->then_block);
+        assert(block->else_block);
+
+        setPreceder(block->then_block, block);
+        scanDep(block->then_block);
+        setPreceder(block->else_block, block);
+        scanDep(block->else_block);
     }
-    else {
-        if (block->then_block) {
-            setPreceder(block->then_block, block);
-            scanDep(block->then_block);
-        }
+    else if (block->then_block) {
+        setPreceder(block->then_block, block);
+        scanDep(block->then_block);
     }
 }
 
