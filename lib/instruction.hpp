@@ -56,6 +56,10 @@ public:
     unreference()
     { --referenced_count; }
 
+    inline void
+    clearReferences()
+    { referenced_count = 0; }
+
     inline BasicBlock *
     getOwnerBlock() const
     { return owner_block; }
@@ -78,6 +82,7 @@ public:
 
     virtual std::string to_string() const = 0;
     virtual void codegen(CodeGen *) = 0;
+    virtual void referenceOperand() const = 0;
     virtual void unreferenceOperand() const = 0;
     virtual bool isCodeGenRoot() const = 0;
     virtual Instruction *
@@ -116,7 +121,8 @@ public:
                                                                         \
         virtual std::string to_string() const;                          \
         virtual void codegen(CodeGen *);                                \
-        virtual void unreferenceOperand() const;                        \
+        virtual void referenceOperand() const { }                       \
+        virtual void unreferenceOperand() const { }                     \
         virtual bool isCodeGenRoot() const { return false; }            \
         virtual Instruction *                                           \
         clone(BasicBlock *block,                                        \
@@ -190,6 +196,20 @@ public:
     virtual bool
     usedInstruction(Instruction *inst) const
     { return left == inst || right == inst; }
+
+    virtual void
+    referenceOperand() const
+    {
+        getLeft()->reference();
+        getRight()->reference();
+    }
+
+    virtual void
+    unreferenceOperand() const
+    {
+        getLeft()->unreference();
+        getRight()->unreference();
+    }
 };
 
 #define defineBinaryInstSwapable(_name)                             \
@@ -214,7 +234,6 @@ public:
                                                                     \
         virtual std::string to_string() const;                      \
         virtual void codegen(CodeGen *);                            \
-        virtual void unreferenceOperand() const;                    \
         virtual Instruction *                                       \
         clone(BasicBlock *block,                                    \
               std::map<Instruction *, Instruction *> &value_map,    \
@@ -257,7 +276,6 @@ public:
                                                                     \
         virtual std::string to_string() const;                      \
         virtual void codegen(CodeGen *);                            \
-        virtual void unreferenceOperand() const;                    \
         virtual Instruction *                                       \
         clone(BasicBlock *block,                                    \
               std::map<Instruction *, Instruction *> &value_map,    \
@@ -326,7 +344,15 @@ public:
 
     virtual std::string to_string() const;
     virtual void codegen(CodeGen *);
-    virtual void unreferenceOperand() const;
+
+    virtual void
+    referenceOperand() const
+    { getAddress()->reference(); }
+
+    virtual void
+    unreferenceOperand() const
+    { getAddress()->unreference(); }
+
     virtual bool
     isCodeGenRoot() const
     { return false; }
@@ -387,7 +413,21 @@ public:
 
     virtual std::string to_string() const;
     virtual void codegen(CodeGen *);
-    virtual void unreferenceOperand() const;
+
+    virtual void
+    referenceOperand() const
+    {
+        getAddress()->reference();
+        getValue()->reference();
+    }
+
+    virtual void
+    unreferenceOperand() const
+    {
+        getAddress()->unreference();
+        getValue()->unreference();
+    }
+
     virtual bool
     isCodeGenRoot() const
     { return true; }
@@ -449,7 +489,15 @@ public:
 
     virtual std::string to_string() const;
     virtual void codegen(CodeGen *);
-    virtual void unreferenceOperand() const;
+
+    virtual void
+    referenceOperand() const
+    { getSpace()->reference(); }
+
+    virtual void
+    unreferenceOperand() const
+    { getSpace()->unreference(); }
+
     virtual bool
     isCodeGenRoot() const
     { return false; }
@@ -562,7 +610,24 @@ public:
 
     virtual std::string to_string() const;
     virtual void codegen(CodeGen *);
-    virtual void unreferenceOperand() const;
+
+    virtual void
+    referenceOperand() const
+    {
+        function->reference();
+        for (auto &arg : arguments) {
+            arg->reference();
+        }
+    }
+
+    virtual void
+    unreferenceOperand() const
+    {
+        function->unreference();
+        for (auto &arg : arguments){
+            arg->unreference();
+        }
+    }
 
     virtual bool
     isCodeGenRoot() const
@@ -644,7 +709,22 @@ public:
 
     virtual std::string to_string() const;
     virtual void codegen(CodeGen *);
-    virtual void unreferenceOperand() const;
+
+    virtual void
+    referenceOperand() const
+    {
+        if (getReturnValue()) {
+            getReturnValue()->reference();
+        }
+    }
+
+    virtual void
+    unreferenceOperand() const
+    {
+        if (getReturnValue()) {
+            getReturnValue()->unreference();
+        }
+    }
 
     virtual bool
     isCodeGenRoot() const
@@ -757,7 +837,22 @@ public:
 
     virtual std::string to_string() const;
     virtual void codegen(CodeGen *);
-    virtual void unreferenceOperand() const;
+
+    virtual void
+    referenceOperand() const
+    {
+        for (auto &branch : branches) {
+            branch.value->reference();
+        }
+    }
+
+    virtual void
+    unreferenceOperand() const
+    {
+        for (auto &branch : branches) {
+            branch.value->unreference();
+        }
+    }
 
     virtual bool
     isCodeGenRoot() const
