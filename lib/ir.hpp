@@ -89,6 +89,14 @@ struct BasicBlock
     {
         BasicBlock *new_bb = new BasicBlock(name.size() ? name : getName() + ".split", depth);
 
+        for (
+            auto iter = iterator;
+            iter != inst_list.end();
+            ++iter
+        ) {
+            (*iter)->setOwnerBlock(new_bb);
+        }
+
         new_bb->inst_list.splice(
             new_bb->inst_list.begin(),
             inst_list,
@@ -105,6 +113,18 @@ struct BasicBlock
         else_block = nullptr;
 
         return new_bb;
+    }
+
+    inline void
+    append(BasicBlock *other)
+    {
+        for (auto &inst_iter : other->inst_list) {
+            inst_iter->setOwnerBlock(this);
+        }
+        inst_list.splice(inst_list.end(), other->inst_list);
+        condition = other->condition;
+        then_block = other->then_block;
+        else_block = other->else_block;
     }
 
     std::ostream &output(std::ostream &os) const;
