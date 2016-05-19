@@ -11,6 +11,7 @@
 #include "../lib/loop_marker.hpp"
 #include "../lib/mem2reg.hpp"
 #include "../lib/inst_rewriter.hpp"
+#include "../lib/phi_eliminator.hpp"
 
 using namespace cyan;
 
@@ -65,7 +66,7 @@ TEST(inst_rewriter_test, loop_invariant)
         "    let i = 0;\n"
         "    let ta = a, tb = b;\n"
         "    while (i < 10) {\n"
-        "        i = i + ta + tb;\n"
+        "        i = i + ta * tb;\n"
         "    }\n"
         "}\n"
     ;
@@ -75,9 +76,11 @@ TEST(inst_rewriter_test, loop_invariant)
 
     std::ofstream original_out("inst_rewriter_loop_invariant_original.ir");
     auto ir = LoopMarker(
-        Mem2Reg(
-            DepAnalyzer(
-                parser->release().release()
+        PhiEliminator(
+            Mem2Reg(
+                DepAnalyzer(
+                    parser->release().release()
+                ).release()
             ).release()
         ).release()
     ).release();
