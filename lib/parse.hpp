@@ -232,8 +232,8 @@ protected:
     Symbol *checkConceptDefined(std::string name);
     Symbol *checkStructDefined(std::string name);
     Type *checkTypeName(std::string name);
-    Type *parseTypeName(TemplateType *template_scope = nullptr);
-    Type *expandTemplate(TemplateType *template_type, const std::vector<Type *> &arguments);
+    Type *parseType();
+    Type *parseLeftHandType(bool &use_left_hand);
     Type *resolveForwardType(Type *type);
 
     void parseGlobalLetStmt();

@@ -765,11 +765,134 @@ public:
     { return return_value == inst; }
 };
 
+class NewInst : public Instruction
+{
+    Instruction *space;
+public:
+    NewInst(Type *type, BasicBlock *owner_block, Instruction *space, std::string name = "")
+        : Instruction(type, owner_block, name), space(space)
+    { }
+
+    inline Instruction *
+    getSpace() const
+    { return space; }
+
+    virtual std::string to_string() const;
+    virtual void codegen(CodeGen *);
+
+    virtual void
+    referenceOperand() const
+    { space->reference(); }
+
+    virtual void
+    unreferenceOperand() const
+    { space->unreference(); }
+
+    virtual bool
+    isCodeGenRoot() const
+    { return false; }
+
+    virtual Instruction *
+    clone(BasicBlock *block,
+          std::map<Instruction *, Instruction *> &value_map,
+          std::string name = "") const
+    {
+        auto ret = new NewInst(
+            getType(),
+            block,
+            space,
+            name
+        );
+        value_map.emplace(
+            const_cast<NewInst*>(this),
+            const_cast<NewInst*>(ret)
+        );
+        return ret;
+    }
+
+    virtual void
+    resolve(const std::map<Instruction *, Instruction *> &value_map)
+    {
+        if (value_map.find(space) != value_map.end()) {
+            space = value_map.at(space);
+        }
+    }
+
+    virtual void
+    replaceUsage(Instruction *original, Instruction *replace)
+    { if (space == original) { space = replace; } }
+
+    virtual bool
+    usedInstruction(Instruction *inst) const
+    { return space == inst; }
+};
+
+class DeleteInst : public Instruction
+{
+    Instruction *target;
+public:
+    DeleteInst(Type *type, BasicBlock *owner_block, Instruction *target, std::string name = "")
+        : Instruction(type, owner_block, name), target(target)
+    { }
+
+    inline Instruction *
+    getTarget() const
+    { return target; }
+
+    virtual std::string to_string() const;
+    virtual void codegen(CodeGen *);
+
+    virtual void
+    referenceOperand() const
+    { target->reference(); }
+
+    virtual void
+    unreferenceOperand() const
+    { target->unreference(); }
+
+    virtual bool
+    isCodeGenRoot() const
+    { return true; }
+
+    virtual Instruction *
+    clone(BasicBlock *block,
+          std::map<Instruction *, Instruction *> &value_map,
+          std::string name = "") const
+    {
+        auto ret = new DeleteInst(
+            getType(),
+            block,
+            target,
+            name
+        );
+        value_map.emplace(
+            const_cast<DeleteInst*>(this),
+            const_cast<DeleteInst*>(ret)
+        );
+        return ret;
+    }
+
+    virtual void
+    resolve(const std::map<Instruction *, Instruction *> &value_map)
+    {
+        if (value_map.find(target) != value_map.end()) {
+            target = value_map.at(target);
+        }
+    }
+
+    virtual void
+    replaceUsage(Instruction *original, Instruction *replace)
+    { if (target == original) { target = replace; } }
+
+    virtual bool
+    usedInstruction(Instruction *inst) const
+    { return target == inst; }
+};
+
 class PhiInst : public Instruction
 {
 public:
-    struct Branch
-    {
+    struct Branch {
         Instruction *value;
         BasicBlock *preceder;
 
@@ -964,6 +1087,8 @@ public:
     macro(AllocaInst)       \
     macro(CallInst)         \
     macro(RetInst)          \
+    macro(NewInst)          \
+    macro(DeleteInst)       \
     macro(PhiInst)
 
 }

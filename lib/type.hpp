@@ -136,16 +136,17 @@ public:
     virtual bool isSigned() const;
 };
 
-class ArrayType : public PointerType
+class ArrayType : public Type
 {
-protected:
-    int lower_bound;
-    int upper_bound;
-
+    Type *base_type;
 public:
-    ArrayType(Type *base_type, int lower_bound, int upper_bound)
-        : PointerType(base_type)
+    ArrayType(Type *base_type)
+        : base_type(base_type)
     { }
+
+    inline Type*
+    getBaseType() const
+    { return base_type; }
 
     virtual size_t size() const;
     virtual std::string to_string() const;
@@ -786,6 +787,7 @@ class TypePool
     std::map<size_t, std::unique_ptr<SignedIntegerType> > signed_integer_type;
     std::map<size_t, std::unique_ptr<UnsignedIntegerType> > unsigned_integer_type;
     std::map<Type *, std::unique_ptr<PointerType> > pointer_type;
+    std::map<Type *, std::unique_ptr<ArrayType> > array_type;
     std::vector<std::unique_ptr<FunctionType> > function_type;
     std::vector<std::unique_ptr<MethodType> > method_type;
     std::map<std::string, std::unique_ptr<ConceptType> > concept_type;
@@ -935,6 +937,7 @@ public:
     SignedIntegerType *getSignedIntegerType(size_t bitwise_width);
     UnsignedIntegerType *getUnsignedIntegerType(size_t bitwise_width);
     PointerType *getPointerType(Type *base_type);
+    ArrayType *getArrayType(Type *base_type);
     MethodType *getMethodType(ConceptType *owner, FunctionType *function);
     CastedStructType *getCastedStructType(StructType *original_struct, ConceptType *concept);
     VTableType *getVTableType(ConceptType *owner);

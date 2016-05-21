@@ -1790,6 +1790,14 @@ CodeGenX64::gen(RetInst *inst)
 }
 
 void
+CodeGenX64::gen(NewInst *inst)
+{ }
+
+void
+CodeGenX64::gen(DeleteInst *inst)
+{ }
+
+void
 CodeGenX64::gen(PhiInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());

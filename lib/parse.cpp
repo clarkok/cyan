@@ -481,7 +481,7 @@ Parser::checkTypeName(std::string name)
 }
 
 Type *
-Parser::parseTypeName(TemplateType *template_scope)
+Parser::parseType()
 {
     if (_peak() != T_ID) {
         throw ParseExpectErrorException(
@@ -490,153 +490,35 @@ Parser::parseTypeName(TemplateType *template_scope)
             _tokenLiteral()
         );
     }
-    auto type_name = peaking_string;
-    _next();
 
-    Type *type = nullptr;
-    if (template_scope) {
-        type = template_scope->findTemplateArgument(type_name);
-        if (_peak() == '<') {
-            throw ParseTypeErrorException(
+    _next();
+    auto type_name = peaking_string;
+    auto ret = checkTypeName(type_name);
+
+    while (_peak() == '[') {
+        if (_next() != ']') {
+            throw ParseExpectErrorException(
                 location,
-                type->to_string() + " is not a template"
+                "`]'",
+                _tokenLiteral()
             );
         }
-    }
-    else {
-        type = checkTypeName(type_name);
-
-        if (type->is<TemplateType>()) {
-            if (_peak() != '<') {
-                throw ParseExpectErrorException(
-                    location,
-                    "template arguments",
-                    _tokenLiteral()
-                );
-            }
-            _next();
-            std::vector<Type *> template_arguments;
-
-            while (_peak() != T_EOF && _peak() != '>') {
-                template_arguments.emplace_back(parseTypeName(template_scope));
-                if (_peak() == '>') {
-                    break;
-                }
-                else if (_peak() != ',') {
-                    throw ParseExpectErrorException(
-                        location,
-                        "','",
-                        _tokenLiteral()
-                    );
-                }
-                _next();
-            }
-            if (_peak() == T_EOF) {
-                throw ParseErrorException(
-                    location,
-                    "unexpected EOF"
-                );
-            }
-            _next();
-
-            type = expandTemplate(type->to<TemplateType>(), template_arguments);
-        }
-        else {
-            if (_peak() == '<') {
-                throw ParseTypeErrorException(
-                    location,
-                    type->to_string() + " is not a template"
-                );
-            }
-        }
+        _next();
+        ret = type_pool->getArrayType(ret);
     }
 
-    return type;
+    return ret;
 }
 
 Type *
-Parser::expandTemplate(TemplateType *template_type, const std::vector<Type *> &arguments)
+Parser::parseLeftHandType(bool &use_left_hand)
 {
-    auto required_iter = template_type->begin();
-    auto argument_iter = arguments.begin();
-
-    bool can_be_expanded = true;
-
-    std::map<TemplateArgumentType *, Type *> template_argument_map;
-
-    while (required_iter != template_type->end() && argument_iter != arguments.end()) {
-        if ((*argument_iter)->is<StructType>()) {
-            auto struct_type = (*argument_iter)->to<StructType>();
-            auto required_concept = required_iter->type->getConcept();
-            if (!struct_type->implementedConcept(required_concept)) {
-                throw ParseTypeErrorException(
-                    location,
-                    struct_type->to_string() + " is not of " + required_concept->to_string()
-                );
-            }
-        }
-        else if ((*argument_iter)->is<ConceptType>()) {
-            auto concept_type = (*argument_iter)->to<ConceptType>();
-            auto required_concept = required_iter->type->getConcept();
-            if (!concept_type->isInheritedFrom(required_concept)) {
-                throw ParseTypeErrorException(
-                    location,
-                    concept_type->to_string() + " is not inherited from " +
-                    required_concept->to_string()
-                );
-            }
-        }
-        else if ((*argument_iter)->is<TemplateArgumentType>()) {
-            can_be_expanded = false;
-            auto concept_type = (*argument_iter)->to<TemplateArgumentType>()->getConcept();
-            auto required_concept = required_iter->type->getConcept();
-            if (!concept_type->isInheritedFrom(required_concept)) {
-                throw ParseTypeErrorException(
-                    location,
-                    concept_type->to_string() + " is not inherited from " +
-                    required_concept->to_string()
-                );
-            }
-        }
-        else if ((*argument_iter)->is<TemplateExpandingType>()) {
-            can_be_expanded = false;
-            auto concept_type = (*argument_iter)->to<ConceptType>();
-            auto required_concept = required_iter->type->getConcept();
-            if (!concept_type->isInheritedFrom(required_concept)) {
-                throw ParseTypeErrorException(
-                    location,
-                    concept_type->to_string() + " is not inherited from " +
-                    required_concept->to_string()
-                );
-            }
-        }
-        else  {
-            throw ParseTypeErrorException(
-                location,
-                "only concept and struct can be used as template arguments, but met " +
-                (*argument_iter)->to_string()
-            );
-        }
-
-        template_argument_map.emplace(required_iter->type.get(), *argument_iter);
-
-        ++required_iter;
-        ++argument_iter;
+    use_left_hand = false;
+    if (_peak() == '&') {
+        use_left_hand = true;
+        _next();
     }
-    if (required_iter != template_type->end() || argument_iter != arguments.end()) {
-        throw ParseTypeErrorException(
-            location,
-            "arguments number does not matched, require " +
-            std::to_string(template_type->arguments_size()) + 
-            " but provided " + 
-            std::to_string(arguments.size())
-        );
-    }
-
-    if (!can_be_expanded) {
-    }
-
-    // TODO complete template expanding
+    return parseType();
 }
 
 Type *
@@ -976,76 +858,7 @@ Parser::parseStructDefine()
         );
     }
 
-    bool is_template = false;
-    auto template_builder = type_pool->getTemplateTypeBuilder();
-
-    if (_next() == '<') {
-        is_template = true;
-        _next();
-
-        while (_peak() != T_EOF && _peak() != '>') {
-            if (_peak() != T_ID) {
-                throw ParseExpectErrorException(
-                    location,
-                    "template argument name",
-                    _tokenLiteral()
-                );
-            }
-            auto argument_name = peaking_string;
-            _next();
-
-            if (_peak() != ':') {
-                throw ParseExpectErrorException(
-                    location,
-                    "template argument concept",
-                    _tokenLiteral()
-                );
-            }
-            _next();
-
-            if (_peak() != T_ID) {
-                throw ParseExpectErrorException(
-                    location,
-                    "template argument concept",
-                    _tokenLiteral()
-                );
-            }
-            auto concept_name = peaking_string;
-            _next();
-
-            auto type = checkTypeName(concept_name);
-            if (!type || !type->is<ConceptType>()) {
-                throw ParseTypeErrorException(
-                    location,
-                    "`" + concept_name + "` is not a concept"
-                );
-            }
-
-            auto concept_type = type->to<ConceptType>();
-            template_builder.addArgument(argument_name, concept_type);
-            if (_peak() == '>') {
-                break;
-            }
-            else if (_peak() != ',') {
-                throw ParseExpectErrorException(
-                    location,
-                    "','",
-                    _tokenLiteral()
-                );
-            }
-            _next();
-        }
-
-        if (_peak() == T_EOF) {
-            throw ParseErrorException(
-                location,
-                "unexpected EOF"
-            );
-        }
-        _next();
-    }
-
-    if (_peak() == ';') {
+    if (_next() == ';') {
         _next();
         return;
     }
@@ -1078,26 +891,10 @@ Parser::parseStructDefine()
                 _tokenLiteral()
             );
         }
-
-        if (_next() != T_ID) {
-            throw ParseExpectErrorException(
-                location,
-                "struct member type",
-                _tokenLiteral()
-            );
-        }
-
-        Type *type = nullptr;
-        if (is_template) {
-            type = template_builder.get()->findTemplateArgument(peaking_string);
-        }
-
-        if (!type) {
-            type = checkTypeName(peaking_string);
-        }
-
-        builder.addMember(member_name, type);
         _next();
+
+        Type *type = parseType();
+        builder.addMember(member_name, type);
 
         if (_peak() == '}') {
             break;
@@ -1113,7 +910,6 @@ Parser::parseStructDefine()
     }
 
     forward_decl->type = builder.commit();
-    forward_decl->is_template = is_template;
 
     if (_peak() == T_EOF) {
         throw ParseErrorException(
@@ -1299,17 +1095,9 @@ Parser::parsePrototype()
             throw ParseExpectErrorException(location, "function arguments type", _tokenLiteral());
         }
 
-        bool use_left_value = false;
-        if (_next() == '&') {
-            use_left_value = true;
-            _next();
-        }
-
-        if (_peak() != T_ID) {
-            throw ParseExpectErrorException(location, "function arguments type", _tokenLiteral());
-        }
-
-        Type *argument_type = checkTypeName(peaking_string);
+        _next();
+        bool use_left_value;
+        Type *argument_type = parseLeftHandType(use_left_value);
         if (use_left_value) {
             if (argument_type->is<ConceptType>()) {
                 throw ParseTypeErrorException(
@@ -1331,7 +1119,7 @@ Parser::parsePrototype()
         );
 
         builder.addArgument(argument_type);
-        if (_next() != ',') {
+        if (_peak() != ',') {
             if (_peak() == ')') {
                 break;
             }

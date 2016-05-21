@@ -169,13 +169,12 @@ PointerType::to_string() const
 
 size_t
 ArrayType::size() const
-{ return (upper_bound - lower_bound) * base_type->size(); }
+{ return CYAN_PRODUCT_BITS / 8; }
 
 std::string
 ArrayType::to_string() const
 {
-    return base_type->to_string() + "[" +
-        (lower_bound ? std::to_string(lower_bound) + ":" : "") + std::to_string(upper_bound) + "]";
+    return base_type->to_string() + "[]";
 }
 
 std::string
@@ -312,6 +311,18 @@ TypePool::getPointerType(Type *base_type)
         );
     }
     return pointer_type[base_type].get();
+}
+
+ArrayType *
+TypePool::getArrayType(Type *base_type)
+{
+    if (array_type.find(base_type) == array_type.end()) {
+        array_type.emplace(
+            base_type,
+            std::unique_ptr<ArrayType>(new ArrayType(base_type))
+        );
+    }
+    return array_type.at(base_type).get();
 }
 
 MethodType *

@@ -91,6 +91,14 @@ RetInst::to_string() const
 { return "\t" + inst_header("ret") + (return_value ? return_value->getName() : ""); }
 
 std::string
+NewInst::to_string() const
+{ return "\t" + inst_header("new") + space->getName(); }
+
+std::string
+DeleteInst::to_string() const
+{ return "\t" + inst_header("delete") + target->getName(); }
+
+std::string
 PhiInst::to_string() const
 {
     std::string ret(value_header("phi"));

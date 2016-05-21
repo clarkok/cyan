@@ -472,19 +472,3 @@ TEST(parser_test, left_value_argument_test)
     // uut->release()->output(std::cout);
 }
 
-TEST(parser_test, struct_template_define_test)
-{
-    static const char SOURCE[] =
-        "concept Deletable {\n"
-        "    function delete();\n"
-        "}\n"
-        "struct List<T : Deletable> {\n"
-        "    ptr : T"
-        "}\n"
-    ;
-
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
-
-    // uut->release()->output(std::cout);
-}
