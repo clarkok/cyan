@@ -16,11 +16,12 @@ class UnreachableCodeEliminater : public Optimizer
     std::map<BasicBlock *, BasicBlock *> block_map;
     std::map<Instruction *, Instruction *> value_map;
 
-    void combineSplitBlocks(Function *func);
     void markUnreachableBlocks(Function *func);
+    void combineSplitBlocks(Function *func);
     void clearUnreachableBlocks(Function *func);
     void unregisterPhiInBlock(BasicBlock *block, BasicBlock *preceder);
     void unregisterPhi(BasicBlock *block, BasicBlock *preceder);
+    void resolvePhiPreceders(Function *func);
 public:
     UnreachableCodeEliminater(IR *ir_)
         : Optimizer(ir_)
@@ -30,11 +31,7 @@ public:
             value_map.clear();
             markUnreachableBlocks(func_pair.second.get());
             combineSplitBlocks(func_pair.second.get());
-        }
-
-        ir.reset(DepAnalyzer(release()).release());
-
-        for (auto &func_pair : ir->function_table) {
+            resolvePhiPreceders(func_pair.second.get());
             clearUnreachableBlocks(func_pair.second.get());
         }
     }

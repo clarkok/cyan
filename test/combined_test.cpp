@@ -90,6 +90,7 @@ TEST(combined_test, case1)
         ir->output(unreachable_eliminated_out);
     }
 
+    ir = DepAnalyzer(ir).release();
     ir = LoopMarker(ir).release();
     ir = PhiEliminator(ir).release();
     {
@@ -180,6 +181,7 @@ TEST(combined_test, case2)
         ir->output(unreachable_eliminated_out);
     }
 
+    ir = DepAnalyzer(ir).release();
     ir = LoopMarker(ir).release();
     ir = PhiEliminator(ir).release();
     {
