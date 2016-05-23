@@ -64,6 +64,62 @@ TEST(mem2reg_test, branch_in_loop)
     Mem2Reg(DepAnalyzer(ir).release(), analyzed_out).release()->output(optimized_out);
 }
 
+TEST(mem2reg_test, scope_in_branch)
+{
+    static const char SOURCE[] =
+        "function main() {\n"
+        "    let t = 1;"
+        "    if (1) {\n"
+        "        let a = 2;\n"
+        "        t = a;\n"
+        "    }\n"
+        "    else {\n"
+        "        let b = 3;\n"
+        "        t = b;\n"
+        "    }\n"
+        "    let l = t;\n"
+        "}\n"
+    ;
+
+    Parser *parser = new Parser(SOURCE);
+    ASSERT_TRUE(parser->parse());
+
+    std::ofstream original_out("mem2reg_scope_in_branch_original.ir");
+    auto ir = parser->release().release();
+    ir->output(original_out);
+
+    std::ofstream analyzed_out("mem2reg_scope_in_branch_analyze_result.ir");
+    std::ofstream optimized_out("mem2reg_scope_in_branch_optimized.ir");
+    Mem2Reg(DepAnalyzer(ir).release(), analyzed_out).release()->output(optimized_out);
+}
+
+TEST(mem2reg_test, scope_in_loop)
+{
+    static const char SOURCE[] =
+        "function main() {\n"
+        "let a = 1, b = 2;\n"
+        "    while (1) {\n"
+        "        if (1) {\n"
+        "            let t = a;\n"
+        "            a = b;\n"
+        "            b = t;\n"
+        "        }\n"
+        "    }\n"
+        "}\n"
+    ;
+
+    Parser *parser = new Parser(SOURCE);
+    ASSERT_TRUE(parser->parse());
+
+    std::ofstream original_out("mem2reg_scope_in_loop_original.ir");
+    auto ir = parser->release().release();
+    ir->output(original_out);
+
+    std::ofstream analyzed_out("mem2reg_scope_in_loop_analyze_result.ir");
+    std::ofstream optimized_out("mem2reg_scope_in_loop_optimized.ir");
+    Mem2Reg(DepAnalyzer(ir).release(), analyzed_out).release()->output(optimized_out);
+}
+
 TEST(mem2reg_test, after_inline)
 {
     static const char SOURCE[] =

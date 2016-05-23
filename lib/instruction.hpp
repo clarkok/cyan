@@ -188,9 +188,11 @@ public:
     {
         if (value_map.find(left) != value_map.end()) {
             left = value_map.at(left);
+            assert(left);
         }
         if (value_map.find(right) != value_map.end()) {
             right = value_map.at(right);
+            assert(right);
         }
     }
 
@@ -381,6 +383,7 @@ public:
     {
         if (value_map.find(address) != value_map.end()) {
             address = value_map.at(address);
+            assert(address);
         }
     }
 
@@ -457,9 +460,11 @@ public:
     {
         if (value_map.find(address) != value_map.end()) {
             address = value_map.at(address);
+            assert(address);
         }
         if (value_map.find(value) != value_map.end()) {
             value = value_map.at(value);
+            assert(value);
         }
     }
 
@@ -526,6 +531,7 @@ public:
     {
         if (value_map.find(space) != value_map.end()) {
             space = value_map.at(space);
+            assert(space);
         }
     }
 
@@ -661,11 +667,13 @@ public:
     {
         if (value_map.find(function) != value_map.end()) {
             function = value_map.at(function);
+            assert(function);
         }
 
         for (auto &arg : *this) {
             if (value_map.find(arg) != value_map.end()) {
                 arg = value_map.at(arg);
+                assert(arg);
             }
         }
     }
@@ -753,6 +761,7 @@ public:
     {
         if (value_map.find(return_value) != value_map.end()) {
             return_value = value_map.at(return_value);
+            assert(return_value);
         }
     }
 
@@ -815,6 +824,7 @@ public:
     {
         if (value_map.find(space) != value_map.end()) {
             space = value_map.at(space);
+            assert(space);
         }
     }
 
@@ -877,6 +887,7 @@ public:
     {
         if (value_map.find(target) != value_map.end()) {
             target = value_map.at(target);
+            assert(target);
         }
     }
 
@@ -1033,6 +1044,7 @@ public:
         for (auto &branch : branches) {
             if (value_map.find(branch.value) != value_map.end()) {
                 branch.value = value_map.at(branch.value);
+                assert(branch.value);
             }
         }
     }

@@ -155,9 +155,10 @@ TEST(combined_test, case2)
     ir = DepAnalyzer(ir).release();
     ir = LoopMarker(ir).release();
 
-    ir = Mem2Reg(ir).release();
     {
         std::ofstream mem2reg_out("combined_case2_mem2reg.ir");
+        std::ofstream mem2reg_debug_out("combined_case2_mem2reg_debug.ir");
+        ir = Mem2Reg(ir, mem2reg_debug_out).release();
         ir->output(mem2reg_out);
     }
 
