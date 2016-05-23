@@ -50,6 +50,9 @@ DeadCodeEliminater::removeInst(Function *func)
 void
 DeadCodeEliminater::_scanner(Instruction *inst)
 {
+    if (scanned.find(inst) != scanned.end()) { return; }
+    scanned.emplace(inst);
+
     inst->reference();
     if (inst->is<BinaryInst>()) {
         _scanner(inst->to<BinaryInst>()->getLeft());
@@ -82,7 +85,6 @@ DeadCodeEliminater::_scanner(Instruction *inst)
         }
     }
     else if (inst->is<ImmediateInst>()) {
-
     }
     else {
         assert(false);

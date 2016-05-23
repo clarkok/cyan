@@ -472,3 +472,17 @@ TEST(parser_test, left_value_argument_test)
     // uut->release()->output(std::cout);
 }
 
+TEST(parser_test, array_index_test)
+{
+    static const char SOURCE[] =
+        "function test(a : i64[], b : i64) : i64 {\n"
+        "    return a[b];\n"
+        "}\n"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    uut->release()->output(std::cout);
+}
+

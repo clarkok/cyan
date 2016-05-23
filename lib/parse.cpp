@@ -2718,6 +2718,56 @@ Parser::parsePostfixExpr()
                 );
             }
         }
+        else if (_peak() == '[') {
+            last_type = resolveForwardType(last_type);
+            if (!last_type->is<ArrayType>()) {
+                throw ParseTypeErrorException(
+                    location,
+                    "type " + last_type->to_string() + " is not an array"
+                );
+            }
+            _next();
+
+            auto array_type = last_type->to<ArrayType>();
+            auto array_inst = result_inst;
+            if (is_left_value) {
+                array_inst = current_block->LoadInst(
+                    array_type,
+                    array_inst
+                );
+            }
+
+            parseExpression();
+            if (!last_type->is<NumericType>()) {
+                throw ParseTypeErrorException(
+                    location,
+                    "type " + last_type->to_string() + " cannot be used as index"
+                );
+            }
+            if (is_left_value) {
+                result_inst = current_block->LoadInst(
+                    last_type,
+                    result_inst
+                );
+            }
+
+            result_inst = current_block->AddInst(
+                type_pool->getPointerType(array_type->getBaseType()),
+                array_inst,
+                result_inst
+            );
+            last_type = array_type->getBaseType();
+            is_left_value = true;
+
+            if (_peak() != ']') {
+                throw ParseExpectErrorException(
+                    location,
+                    "`]'",
+                    _tokenLiteral()
+                );
+            }
+            _next();
+        }
         else {
             break;
         }

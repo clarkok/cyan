@@ -95,7 +95,7 @@ Inliner::performInline(
             "_" + std::to_string(caller->countLocalTemp())
         );
         auto alloc_inst = new AllocaInst(
-            arg->getType(),
+            ir->type_pool->getPointerType(arg->getType()),
             imm_inst,
             block,
             "_" + std::to_string(caller->countLocalTemp())

@@ -61,7 +61,7 @@ Mem2Reg::performReplace(Function *func)
         debug_out << "========================================" << std::endl;
 
         version_map.clear();
-        load_map.clear();
+        value_map.clear();
         for (auto &block_ptr : func->block_list) {
             replaceInBasicBlock(func, block_ptr.get(), alloc_inst);
         }
@@ -82,6 +82,7 @@ Mem2Reg::replaceInBasicBlock(Function *func, BasicBlock *block, Instruction *ins
         inst_iter != block->inst_list.end();
     ) {
         if ((*inst_iter)->is<AllocaInst>() && inst_iter->get() == inst) {
+            inst_to_replace.reset(inst_iter->release());
             inst_iter = block->inst_list.erase(inst_iter);
             continue;
         }
@@ -94,35 +95,32 @@ Mem2Reg::replaceInBasicBlock(Function *func, BasicBlock *block, Instruction *ins
 
         if ((*inst_iter)->is<LoadInst>() && (*inst_iter)->to<LoadInst>()->getAddress() == inst) {
             if (version_map.find(block) != version_map.end()) {
-                load_map.emplace(inst_iter->get(), version_map.at(block));
+                value_map.emplace(inst_iter->get(), version_map.at(block));
             }
             else {
-                version_map.emplace(block, inst_iter->get());
+                auto builder = PhiInst::Builder(
+                    inst->getType()->to<PointerType>()->getBaseType(),
+                    block,
+                    inst->getName() + "." + std::to_string(func->countLocalTemp())
+                );
+                version_map.emplace(block, builder.get());
+                value_map.emplace(inst_iter->get(), builder.get());
+
+                for (auto preceder : block->preceders) {
+                    builder.addBranch(requestLatestValue(func, preceder, inst), preceder);
+                }
 
                 std::set<Instruction *> prev_values;
-                for (auto preceder : block->preceders) {
-                    prev_values.emplace(requestLatestValue(func, preceder, inst));
+                for (auto &branch : *builder.get()) {
+                    prev_values.emplace(branch.value);
                 }
 
-                assert(prev_values.size());
                 if (prev_values.size() == 1) {
-                    version_map[block] = *prev_values.begin();
+                    value_map.emplace(builder.get(), builder.get()->begin()->value);
                 }
                 else {
-                    auto builder = PhiInst::Builder(
-                        inst->getType()->to<PointerType>()->getBaseType(),
-                        block,
-                        inst->getName() + "." + std::to_string(func->countLocalTemp())
-                    );
-                    for (auto preceder : block->preceders) {
-                        builder.addBranch(requestLatestValue(func, preceder, inst), preceder);
-                    }
-
-                    version_map[block] = builder.get();
                     block->inst_list.emplace_front(builder.release());
                 }
-
-                load_map.emplace(inst_iter->get(), version_map.at(block));
             }
             inst_iter = block->inst_list.erase(inst_iter);
             continue;
@@ -145,26 +143,26 @@ Mem2Reg::requestLatestValue(Function *func, BasicBlock *block, Instruction *inst
         return version_map.at(block);
     }
 
-    std::set<Instruction *> prev_values;
+    auto builder = PhiInst::Builder(
+        inst->getType()->to<PointerType>()->getBaseType(),
+        block,
+        inst->getName() + "." + std::to_string(func->countLocalTemp())
+    );
+    version_map[block] = builder.get();
+
     for (auto preceder : block->preceders) {
-        prev_values.emplace(requestLatestValue(func, preceder, inst));
+        builder.addBranch(requestLatestValue(func, preceder, inst), preceder);
     }
 
-    assert(prev_values.size());
+    std::set<Instruction *> prev_values;
+    for (auto &branch : *builder.get()) {
+        prev_values.emplace(branch.value);
+    }
+
     if (prev_values.size() == 1) {
-        version_map[block] = *prev_values.begin();
+        value_map.emplace(builder.get(), builder.get()->begin()->value);
     }
     else {
-        auto builder = PhiInst::Builder(
-            inst->getType()->to<PointerType>()->getBaseType(),
-            block,
-            inst->getName() + "." + std::to_string(func->countLocalTemp())
-        );
-        for (auto preceder : block->preceders) {
-            builder.addBranch(requestLatestValue(func, preceder, inst), preceder);
-        }
-
-        version_map[block] = builder.get();
         block->inst_list.emplace_front(builder.release());
     }
 
@@ -176,15 +174,15 @@ Mem2Reg::resolveMultipleReplace()
 {
     std::map<Instruction *, Instruction *> resolved_load_map;
 
-    for (auto &load_pair : load_map) {
+    for (auto &load_pair : value_map) {
         auto resolved = load_pair.second;
-        while (load_map.find(resolved) != load_map.end()) {
-            resolved = load_map.at(resolved);
+        while (value_map.find(resolved) != value_map.end()) {
+            resolved = value_map.at(resolved);
         }
         assert(resolved);
         resolved_load_map.emplace(load_pair.first, resolved);
     }
-    resolved_load_map.swap(load_map);
+    resolved_load_map.swap(value_map);
 }
 
 void
@@ -192,10 +190,10 @@ Mem2Reg::replaceUsage(Function *func)
 {
     for (auto &block_ptr : func->block_list) {
         for (auto &inst_ptr : block_ptr->inst_list) {
-            inst_ptr->resolve(load_map);
+            inst_ptr->resolve(value_map);
         }
-        if (load_map.find(block_ptr->condition) != load_map.end()) {
-            block_ptr->condition = load_map.at(block_ptr->condition);
+        if (value_map.find(block_ptr->condition) != value_map.end()) {
+            block_ptr->condition = value_map.at(block_ptr->condition);
         }
     }
 }

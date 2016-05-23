@@ -65,9 +65,10 @@ TEST(combined_test, case1)
     ir = DepAnalyzer(ir).release();
     ir = LoopMarker(ir).release();
 
-    ir = Mem2Reg(ir).release();
     {
         std::ofstream mem2reg_out("combined_case1_mem2reg.ir");
+        std::ofstream mem2reg_debug_out("combined_case1_mem2reg_debug.ir");
+        ir = Mem2Reg(ir, mem2reg_debug_out).release();
         ir->output(mem2reg_out);
     }
 
@@ -99,6 +100,95 @@ TEST(combined_test, case1)
     ir = DeadCodeEliminater(ir).release();
     {
         std::ofstream dead_code_eliminated("combined_case1_dead_code_eliminated.ir");
+        ir->output(dead_code_eliminated);
+    }
+}
+
+TEST(combined_test, case2)
+{
+    static const char SOURCE[] =
+        "function partition(a : i64[], lo : i64, hi : i64) : i64 {\n"
+        "    let pivot = a[hi];\n"
+        "    let i = lo;\n"
+        "    let j = lo;\n"
+        "    while (j < hi) {\n"
+        "        if (a[j] < pivot) {\n"
+        "            let t = a[i];\n"
+        "            a[i] = a[j];\n"
+        "            a[j] = t;\n"
+        "            i = i + 1;\n"
+        "        }\n"
+        "        j = j + 1;\n"
+        "    }\n"
+        "    let t = a[i];\n"
+        "    a[i] = a[j];\n"
+        "    a[j] = t;\n"
+        "    return i;\n"
+        "}\n"
+        "function quicksort(a : i64[], lo : i64, hi : i64) {\n"
+        "    if (lo < hi) {\n"
+        "        let p = partition(a, lo, hi);\n"
+        "        quicksort(a, lo, p - 1);\n"
+        "        quicksort(a, p + 1, hi);\n"
+        "    }\n"
+        "}\n"
+        "function main(a : i64[], n : i64) {\n"
+        "    quicksort(a, 0, n - 1);\n"
+        "}\n"
+    ;
+
+    Parser *parser = new Parser(SOURCE);
+    ASSERT_TRUE(parser->parse());
+
+    auto ir = parser->release().release();
+    {
+        std::ofstream parsed_out("combined_case2_parsed.ir");
+        ir->output(parsed_out);
+    }
+
+    ir = Inliner(ir).release();
+    {
+        std::ofstream inlined_out("combined_case2_inlined.ir");
+        ir->output(inlined_out);
+    }
+
+    ir = DepAnalyzer(ir).release();
+    ir = LoopMarker(ir).release();
+
+    ir = Mem2Reg(ir).release();
+    {
+        std::ofstream mem2reg_out("combined_case2_mem2reg.ir");
+        ir->output(mem2reg_out);
+    }
+
+    ir = PhiEliminator(ir).release();
+    {
+        std::ofstream phi_eliminated_out("combined_case2_phi_eliminated.ir");
+        ir->output(phi_eliminated_out);
+    }
+
+    ir = InstRewriter(ir).release();
+    {
+        std::ofstream inst_rewriten_out("combined_case2_inst_rewriten.ir");
+        ir->output(inst_rewriten_out);
+    }
+
+    ir = UnreachableCodeEliminater(ir).release();
+    {
+        std::ofstream unreachable_eliminated_out("combined_case2_unreachable_eliminated.ir");
+        ir->output(unreachable_eliminated_out);
+    }
+
+    ir = LoopMarker(ir).release();
+    ir = PhiEliminator(ir).release();
+    {
+        std::ofstream phi_eliminated_2_out("combined_case2_phi_eliminated_2.ir");
+        ir->output(phi_eliminated_2_out);
+    }
+
+    ir = DeadCodeEliminater(ir).release();
+    {
+        std::ofstream dead_code_eliminated("combined_case2_dead_code_eliminated.ir");
         ir->output(dead_code_eliminated);
     }
 }

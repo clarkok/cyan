@@ -10,6 +10,7 @@
 #include <map>
 
 #include "optimizer.hpp"
+#include "phi_eliminator.hpp"
 
 namespace cyan {
 
@@ -17,7 +18,8 @@ class Mem2Reg : public Optimizer
 {
     std::set<Instruction *> alloc_insts;
     std::map<BasicBlock *, Instruction *> version_map;
-    std::map<Instruction *, Instruction *> load_map;
+    std::map<Instruction *, Instruction *> value_map;
+    std::unique_ptr<Instruction> inst_to_replace;
 
     void scanAllAllocInst(Function *func);
     void filterAllocInst(Function *func);
@@ -34,10 +36,10 @@ class Mem2Reg : public Optimizer
 public:
     static std::stringstream trash_out;
 
-    Mem2Reg(IR *ir, std::ostream &os = trash_out)
-        : Optimizer(ir), debug_out(os)
+    Mem2Reg(IR *_ir, std::ostream &os = trash_out)
+        : Optimizer(_ir), debug_out(os)
     {
-        for (auto &func_iter : ir->function_table) {
+        for (auto &func_iter : _ir->function_table) {
             while (true) {
                 scanAllAllocInst(func_iter.second.get());
                 filterAllocInst(func_iter.second.get());

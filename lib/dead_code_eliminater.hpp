@@ -16,11 +16,14 @@ class DeadCodeEliminater : public Optimizer
     void removeInst(Function *func);
 
     void _scanner(Instruction *inst);
+
+    std::set<Instruction *> scanned;
 public:
     DeadCodeEliminater(IR *ir)
         : Optimizer(ir)
     {
         for (auto &func_pair : ir->function_table) {
+            scanned.clear();
             clearInstReference(func_pair.second.get());
             scanInstReference(func_pair.second.get());
             removeInst(func_pair.second.get());
