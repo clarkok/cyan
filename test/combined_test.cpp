@@ -11,7 +11,6 @@
 #include "../lib/dep_analyzer.hpp"
 #include "../lib/loop_marker.hpp"
 #include "../lib/mem2reg.hpp"
-#include "../lib/phi_eliminator.hpp"
 #include "../lib/inst_rewriter.hpp"
 #include "../lib/unreachable_code_eliminater.hpp"
 #include "../lib/dead_code_eliminater.hpp"
