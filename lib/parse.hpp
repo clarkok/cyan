@@ -31,7 +31,7 @@ public:
         size_t size;
         TChar *content;
 
-        Buffer(size_t size, const char *content)
+        Buffer(size_t size, const TChar *content)
             : size(size), content(new TChar[size])
         { std::memcpy(this->content, content, size); }
 
@@ -66,6 +66,19 @@ public:
 
         ParseErrorException(Location location, std::string message)
             : _what(message + "\n     " + std::to_string(location) + "\n")
+        { }
+
+        const char *
+        what() const noexcept
+        { return _what.c_str(); }
+    };
+
+    struct ParseIOException : std::exception
+    {
+        std::string _what;
+
+        ParseIOException(const char *filename)
+            : _what(std::string("file ") + filename + "cannot be openned")
         { }
 
         const char *
@@ -171,9 +184,9 @@ public:
 
 protected:
     Location location;
-    Buffer buffer;
-    decltype(buffer.cbegin()) current;
-    decltype(buffer.cbegin()) token_start;
+    std::unique_ptr<Buffer> buffer;
+    decltype(buffer->cbegin()) current;
+    decltype(buffer->cbegin()) token_start;
     int peaking_token;
     intptr_t peaking_int;
     std::string peaking_string;
@@ -210,7 +223,7 @@ private:
 
     inline bool
     _endOfInput(int offset = 0)
-    { return buffer.cend() - current <= offset; }
+    { return buffer->cend() - current <= offset; }
 
     inline std::string
     _tokenLiteral() const
@@ -276,21 +289,21 @@ protected:
     void parseUnaryExpr();
     void parseNewExpr();
 
+    bool _parse();
+
 public:
-    Parser(const char *content)
-        : location("\"" + std::string(content) + "\""),
-          buffer(std::strlen(content) + 1, content),
-          current(buffer.cbegin()),
+    Parser(ErrorCollector *error_collector)
+        : location(""),
           peaking_token(T_UNPEAKED),
           peaking_int(0),
           peaking_string(""),
           symbol_table(new SymbolTable()),
           type_pool(new TypePool()),
-          error_counter(new LimitErrorCollector(ERROR_NR_LIMIT)),
+          error_counter(new CounterErrorCollector()),
           error_collector(
               dynamic_cast<ErrorCollector*>(
                   ChainErrorCollector::Builder()
-                      .addCollector(new ScreenOutputErrorCollector())
+                      .addCollector(error_collector)
                       .addCollector(error_counter)
                       .release()
               )
@@ -300,7 +313,8 @@ public:
 
     virtual ~Parser() = default;
 
-    bool parse();
+    bool parse(const char *content);
+    bool parseFile(const char *filename);
 
     std::unique_ptr<IR> release();
 };

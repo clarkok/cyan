@@ -46,8 +46,8 @@ TEST(combined_test, case1)
         "}\n"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     auto ir = parser->release().release();
     {
@@ -137,8 +137,8 @@ TEST(combined_test, case2)
         "}\n"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     auto ir = parser->release().release();
     {

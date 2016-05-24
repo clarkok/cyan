@@ -14,8 +14,8 @@ using namespace cyan;
 #define define_codegen_x64_test(name, source)                           \
     TEST(codegen_x64_test, name)                                        \
     {                                                                   \
-        Parser *parser = new Parser(source);                            \
-        ASSERT_TRUE(parser->parse());                                   \
+        Parser *parser = new Parser(new ScreenOutputErrorCollector());  \
+        ASSERT_TRUE(parser->parse(source));                             \
         CodeGenX64 *uut = new CodeGenX64(parser->release().release());  \
         std::ofstream ir_out("codegen_x64_" #name ".ir");               \
         uut->get()->output(ir_out) << std::endl;                        \

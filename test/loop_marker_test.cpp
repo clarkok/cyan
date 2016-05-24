@@ -23,8 +23,8 @@ TEST(loop_marker_test, basic_test)
         "}\n"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("loop_marker_basic_test.ir");
     auto ir = parser->release().release();
@@ -53,8 +53,8 @@ TEST(loop_marker_test, nested_loop_test)
         "}\n"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("loop_marker_nested_loop_test.ir");
     auto ir = parser->release().release();

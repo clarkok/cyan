@@ -23,8 +23,8 @@ TEST(mem2reg_test, basic_test)
         "}\n"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("mem2reg_basic_test_original.ir");
     auto ir = parser->release().release();
@@ -52,8 +52,8 @@ TEST(mem2reg_test, branch_in_loop)
         "}\n"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("mem2reg_branch_in_loop_original.ir");
     auto ir = parser->release().release();
@@ -81,8 +81,8 @@ TEST(mem2reg_test, scope_in_branch)
         "}\n"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("mem2reg_scope_in_branch_original.ir");
     auto ir = parser->release().release();
@@ -108,8 +108,8 @@ TEST(mem2reg_test, scope_in_loop)
         "}\n"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("mem2reg_scope_in_loop_original.ir");
     auto ir = parser->release().release();
@@ -140,8 +140,8 @@ TEST(mem2reg_test, after_inline)
         "    compare_and_swap(a, b);\n"
         "}\n";
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("mem2reg_after_inline_test_original.ir");
     auto ir = parser->release().release();

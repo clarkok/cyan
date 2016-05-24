@@ -16,8 +16,8 @@ TEST(dep_analyzer_test, basic_test)
         "let a = (1 && 2) || (3 && 4);"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("dep_analyzer_basic_test.ir");
     auto ir = parser->release().release();
@@ -39,8 +39,8 @@ TEST(dep_analyzer_test, loop_test)
         "}\n"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("dep_analyzer_loop_test.ir");
     auto ir = parser->release().release();

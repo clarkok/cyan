@@ -1,38 +1,34 @@
-
-conecpt Person
-{
-    fn const getName() : string;
-    fn const getAge() : i32;
-};
-
-struct Student
-{
-    string name;
-    i32 age;
-};
-
-impl Persion for Student
-{
-    fn const
-    getName() : string
-    { return name; }
-
-    fn const
-    getAge() : i32
-    { return age; }
-};
-
-fn
-printPersionInfo(Person p) : void
-{
-    print(p.getName());
-    println(p.getAge());
+concept Person {
+    function getID() : i32;
+    function getAge() : i32;
+    function getName() : i8[];
 }
 
-fn
-main()
-{
-    let person = new Student { name: "Clarkok", age: 21 };
-    printPersonInfo(person);
+struct Student {
+    name: i8[],
+    id: i32,
+    age: i32
 }
 
+impl Student : Person {
+    function getID() : i32 {
+        return this.id;
+    }
+
+    function getAge() : i32 {
+        return this.age;
+    }
+
+    function getName() : i8[] {
+        return this.name;
+    }
+}
+
+function newStudent(name : i8[], id : i32, age : i32) : Student {
+    let ret = new Student;
+    ret.name = name;
+    ret.id = id;
+    ret.age = age;
+
+    return ret;
+}

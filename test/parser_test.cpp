@@ -13,8 +13,8 @@ TEST(parser_test, let_stmt)
     static const char SOURCE[] =
         "let a = 1 + 2;";
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -24,8 +24,8 @@ TEST(parser_test, let_define_stmt)
     static const char SOURCE[] =
         "let a = 1 + 2, b = a, c = a + b;";
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -35,8 +35,8 @@ TEST(parser_test, logic_and_test)
     static const char SOURCE[] =
         "let a = 1 && 2 && 0;";
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -46,8 +46,8 @@ TEST(parser_test, logic_or_test)
     static const char SOURCE[] =
         "let a = 1 || 2 || 3;";
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -60,8 +60,8 @@ TEST(parser_test, multiple_let_test)
         "let c = a + b;\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -75,8 +75,8 @@ TEST(parser_test, function_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -93,8 +93,8 @@ TEST(parser_test, multiple_functions_test)
         "function func3() {}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -108,8 +108,8 @@ TEST(parser_test, function_forward_decl_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -125,8 +125,8 @@ TEST(parser_test, return_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -145,8 +145,8 @@ TEST(parser_test, block_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -167,8 +167,8 @@ TEST(parser_test, if_else_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -186,8 +186,8 @@ TEST(parser_test, single_if_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -210,8 +210,8 @@ TEST(parser_test, nested_if_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -227,8 +227,8 @@ TEST(parser_test, while_test)
         "}"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -248,8 +248,8 @@ TEST(parser_test, continue_test)
         "}"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -269,8 +269,8 @@ TEST(parser_test, break_test)
         "}"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -291,8 +291,8 @@ TEST(parser_test, nested_loop_test)
         "}"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -309,8 +309,8 @@ TEST(parser_test, concept_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -324,8 +324,8 @@ TEST(parser_test, struct_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -342,8 +342,8 @@ TEST(parser_test, struct_member_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -360,8 +360,8 @@ TEST(parser_test, struct_member_struct_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -379,8 +379,8 @@ TEST(parser_test, function_call_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -396,8 +396,8 @@ TEST(parser_test, method_call_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -421,8 +421,8 @@ TEST(parser_test, impl_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -446,8 +446,8 @@ TEST(parser_test, call_concept_method_on_struct_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -466,8 +466,8 @@ TEST(parser_test, left_value_argument_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -480,8 +480,8 @@ TEST(parser_test, array_index_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
 }
@@ -506,8 +506,16 @@ TEST(parser_test, new_delete_test)
         "}\n"
     ;
 
-    Parser *uut = new Parser(SOURCE);
-    ASSERT_TRUE(uut->parse());
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
 
     // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, parse_file_test)
+{
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parseFile(__PROJECT_DIR__ "/example/example.cy"));
+
+    uut->release()->output(std::cout);
 }

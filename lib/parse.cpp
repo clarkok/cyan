@@ -235,7 +235,7 @@ Parser::_parseLineComment()
 }
 
 bool
-Parser::parse()
+Parser::_parse()
 {
     _registerReserved();
 
@@ -1137,12 +1137,8 @@ Parser::parsePrototype()
         function_type = builder.commit(type_pool->getVoidType());
     }
     else {
-        if (_next() != T_ID) {
-            throw ParseExpectErrorException(location, "function return type", _tokenLiteral());
-        }
-
-        function_type = builder.commit(checkTypeName(peaking_string));
         _next();
+        function_type = builder.commit(parseType());
     }
 
     last_type = function_type;
@@ -2997,6 +2993,39 @@ Parser::parseNewExpr()
         last_type = base_type;
         is_left_value = false;
     }
+}
+
+bool
+Parser::parse(const char *content)
+{
+    location = Location(content);
+    buffer.reset(new Buffer(std::strlen(content) + 1, content));
+    current = buffer->cbegin();
+    token_start = buffer->cbegin();
+
+    return _parse();
+}
+
+bool
+Parser::parseFile(const char *filename)
+{
+    std::FILE *f = std::fopen(filename, "r");
+    if (!f) { throw ParseIOException(filename); }
+
+    std::fseek(f, 0, SEEK_END);
+    auto file_size = std::ftell(f);
+    std::fseek(f, 0, SEEK_SET);
+
+    char content[file_size + 1];
+    std::fread(content, file_size, 1, f);
+    content[file_size] = '\0';
+
+    location = Location(filename);
+    buffer.reset(new Buffer(static_cast<size_t>(file_size) + 1, content));
+    current = buffer->cbegin();
+    token_start = buffer->cbegin();
+
+    return _parse();
 }
 
 std::unique_ptr<IR>

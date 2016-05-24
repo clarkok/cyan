@@ -26,8 +26,8 @@ TEST(phi_eliminator_test, basic_test)
         "}\n"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("phi_eliminator_basic_test_original.ir");
     auto ir = Mem2Reg(

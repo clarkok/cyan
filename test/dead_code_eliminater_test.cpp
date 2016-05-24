@@ -19,8 +19,8 @@ TEST(dead_code_eliminater_test, basic_test)
         "let a = 1 + 2 * 3 / 4;"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("dead_code_eliminater_basic_original.ir");
     auto ir = parser->release().release();

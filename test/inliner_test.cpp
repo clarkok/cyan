@@ -31,8 +31,8 @@ TEST(inliner_test, function_test)
         "    compare_and_swap(a, b);\n"
         "}\n";
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("inliner_function_test_original.ir");
     auto ir = parser->release().release();
@@ -66,8 +66,8 @@ TEST(inliner_test, method_test)
         "}\n"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("inliner_method_test_original.ir");
     auto ir = parser->release().release();

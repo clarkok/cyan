@@ -41,8 +41,8 @@ TEST(unreachable_code_elimimater, basic_test)
         "}\n"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("unreachable_code_eliminater_basic_original.ir");
     auto ir = parser->release().release();

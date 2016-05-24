@@ -21,8 +21,8 @@ TEST(inst_rewriter_test, constant_prop)
         "let a = 1 + 2 * 3 / 4;"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("inst_rewriter_constant_prop_original.ir");
     auto ir = parser->release().release();
@@ -43,8 +43,8 @@ TEST(inst_rewriter_test, common_expression)
         "}\n"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("inst_rewriter_common_expression_original.ir");
     auto ir = Mem2Reg(
@@ -71,8 +71,8 @@ TEST(inst_rewriter_test, loop_invariant)
         "}\n"
     ;
 
-    Parser *parser = new Parser(SOURCE);
-    ASSERT_TRUE(parser->parse());
+    Parser *parser = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(parser->parse(SOURCE));
 
     std::ofstream original_out("inst_rewriter_loop_invariant_original.ir");
     auto ir = LoopMarker(
