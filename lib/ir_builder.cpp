@@ -242,6 +242,26 @@ IRBuilder::BlockBuilder::RetInst(Type *type, Instruction *return_value)
     return ret;
 }
 
+Instruction *
+IRBuilder::BlockBuilder::NewInst(Type *type, Instruction *space, std::string name)
+{
+    assert(!productEnded());
+    Instruction *ret;
+    product->inst_list.emplace_back(ret = new class NewInst(type, product, space, tempName(name)));
+    space->reference();
+    return ret;
+}
+
+Instruction *
+IRBuilder::BlockBuilder::DeleteInst(Type *type, Instruction *target, std::string name)
+{
+    assert(!productEnded());
+    Instruction *ret;
+    product->inst_list.emplace_back(ret = new class DeleteInst(type, product, target, tempName(name)));
+    target->reference();
+    return ret;
+}
+
 void
 IRBuilder::BlockBuilder::JumpInst(BasicBlock *block)
 {

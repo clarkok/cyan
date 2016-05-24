@@ -92,7 +92,7 @@ RetInst::to_string() const
 
 std::string
 NewInst::to_string() const
-{ return "\t" + inst_header("new") + space->getName(); }
+{ return value_header("new") + space->getName(); }
 
 std::string
 DeleteInst::to_string() const

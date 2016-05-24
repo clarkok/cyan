@@ -385,10 +385,9 @@ public:
     {
         std::string name;
         Type *type;
-        int offset;
 
-        Member(std::string name, Type *type, int offset)
-            : name(name), type(type), offset(offset)
+        Member(std::string name, Type *type)
+            : name(name), type(type)
         { }
     };
 
@@ -418,11 +417,10 @@ public:
     {
     private:
         std::unique_ptr<StructType> product;
-        int offset;
 
     public:
         Builder(std::string name)
-            : product(new StructType(name)), offset(0)
+            : product(new StructType(name))
         { }
 
         inline StructType *
@@ -438,7 +436,7 @@ public:
                 }
             }
 
-            product->members.emplace_back(name, type, offset++);
+            product->members.emplace_back(name, type);
             return *this;
         }
     };
@@ -494,10 +492,12 @@ public:
     inline int
     getMemberOffset(std::string name) const
     {
+        int counter = 0;
         for (auto &m : members) {
             if (m.name == name) {
-                return m.offset;
+                return counter;
             }
+            ++counter;
         }
         return std::numeric_limits<int>::max();
     }

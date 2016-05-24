@@ -139,6 +139,9 @@ public:
 
         Instruction *RetInst(Type *type, Instruction *return_value);
 
+        Instruction *NewInst(Type *type, Instruction *space, std::string name = "");
+        Instruction *DeleteInst(Type *type, Instruction *target, std::string name = "");
+
         void JumpInst(BasicBlock *block);
         void BrInst(Instruction *condition, BasicBlock *then_block, BasicBlock *else_block);
 

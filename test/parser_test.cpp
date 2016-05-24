@@ -483,6 +483,31 @@ TEST(parser_test, array_index_test)
     Parser *uut = new Parser(SOURCE);
     ASSERT_TRUE(uut->parse());
 
-    uut->release()->output(std::cout);
+    // uut->release()->output(std::cout);
 }
 
+
+TEST(parser_test, new_delete_test)
+{
+    static const char SOURCE[] =
+        "struct Student {\n"
+        "    id : i32,\n"
+        "    age : i32\n"
+        "}\n"
+        "function main() {\n"
+        "    let t = new Student;\n"
+        "    delete t;\n"
+        "    let b = new Student[10];\n"
+        "    delete b;\n"
+        "    let s = new i8[10];\n"
+        "    delete s;\n"
+        "    let m = new Student[][20];\n"
+        "    delete m;\n"
+        "}\n"
+    ;
+
+    Parser *uut = new Parser(SOURCE);
+    ASSERT_TRUE(uut->parse());
+
+    // uut->release()->output(std::cout);
+}

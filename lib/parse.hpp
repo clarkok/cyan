@@ -157,11 +157,13 @@ public:
         R_BREAK,
         R_CONCEPT,
         R_CONTINUE,
+        R_DELETE,
         R_ELSE,
         R_FUNCTION,
         R_IF,
         R_IMPL,
         R_LET,
+        R_NEW,
         R_RETURN,
         R_STRUCT,
         R_WHILE,
@@ -254,6 +256,7 @@ protected:
     void parseWhileStmt();
     void parseBreakStmt();
     void parseContinueStmt();
+    void parseDeleteStmt();
 
     void parseExpression();
     void parseAssignmentExpr();
@@ -271,6 +274,7 @@ protected:
     void parsePrefixExpr();
     void parsePostfixExpr();
     void parseUnaryExpr();
+    void parseNewExpr();
 
 public:
     Parser(const char *content)

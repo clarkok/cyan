@@ -778,7 +778,7 @@ class NewInst : public Instruction
 {
     Instruction *space;
 public:
-    NewInst(Type *type, BasicBlock *owner_block, Instruction *space, std::string name = "")
+    NewInst(Type *type, BasicBlock *owner_block, Instruction *space, std::string name)
         : Instruction(type, owner_block, name), space(space)
     { }
 
@@ -841,7 +841,7 @@ class DeleteInst : public Instruction
 {
     Instruction *target;
 public:
-    DeleteInst(Type *type, BasicBlock *owner_block, Instruction *target, std::string name = "")
+    DeleteInst(Type *type, BasicBlock *owner_block, Instruction *target, std::string name)
         : Instruction(type, owner_block, name), target(target)
     { }
 

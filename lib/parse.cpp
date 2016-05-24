@@ -315,11 +315,13 @@ Parser::_registerReserved()
     reserved("break", R_BREAK);
     reserved("concept", R_CONCEPT);
     reserved("continue", R_CONTINUE);
+    reserved("delete", R_DELETE);
     reserved("else", R_ELSE);
     reserved("function", R_FUNCTION);
     reserved("if", R_IF);
     reserved("impl", R_IMPL);
     reserved("let", R_LET);
+    reserved("new", R_NEW);
     reserved("return", R_RETURN);
     reserved("struct", R_STRUCT);
     reserved("while", R_WHILE);
@@ -1204,6 +1206,9 @@ Parser::parseStatement()
                 case R_CONTINUE:
                     parseContinueStmt();
                     return;
+                case R_DELETE:
+                    parseDeleteStmt();
+                    return;
                 default:
                     throw ParseExpectErrorException(location, "statement", _tokenLiteral());
             }
@@ -1555,6 +1560,47 @@ Parser::parseContinueStmt()
 
     current_block->JumpInst(loop_stack.top().continue_block);
     current_block = current_function->newBasicBlock(loop_stack.size());
+
+    if (_peak() != ';') {
+        throw ParseExpectErrorException(
+            location,
+            "';'",
+            _tokenLiteral()
+        );
+    }
+    _next();
+}
+
+void
+Parser::parseDeleteStmt()
+{
+    assert(_peak() == T_ID);
+
+    auto *symbol = symbol_table->lookup(peaking_string);
+    assert(symbol);
+    assert(symbol->token_value == R_DELETE);
+    _next();
+
+    parseExpression();
+    if (is_left_value) {
+        result_inst = current_block->LoadInst(
+            last_type,
+            result_inst
+        );
+    }
+
+    if (
+        !last_type->is<StructType>() &&
+        !last_type->is<ConceptType>() &&
+        !last_type->is<ArrayType>()
+    ) {
+        throw ParseTypeErrorException(
+            location,
+            "type " + last_type->to_string() + " cannot be deleted"
+        );
+    }
+
+    current_block->DeleteInst(last_type, result_inst);
 
     if (_peak() != ';') {
         throw ParseExpectErrorException(
@@ -2796,6 +2842,11 @@ Parser::parseUnaryExpr()
                 throw ParseUndefinedErrorException(location, variable_name);
             }
 
+            if (symbol->klass == Symbol::K_RESERVED && symbol->token_value == R_NEW) {
+                parseNewExpr();
+                break;
+            }
+
             last_type = symbol->type;
             is_left_value = true;
 
@@ -2849,6 +2900,102 @@ Parser::parseUnaryExpr()
         }
         default:
             throw ParseExpectErrorException(location, "unary", _tokenLiteral());
+    }
+}
+
+void
+Parser::parseNewExpr()
+{
+    assert(_peak() == T_ID);
+
+    auto *symbol = symbol_table->lookup(peaking_string);
+    assert(symbol);
+    assert(symbol->token_value == R_NEW);
+
+    if (_next() != T_ID) {
+        throw ParseExpectErrorException(
+            location,
+            "Type",
+            _tokenLiteral()
+        );
+    }
+    _next();
+
+    Type *base_type = checkTypeName(peaking_string);
+    size_t size = base_type->size();
+
+    if (_peak() == '[') {
+        while (_next() == ']') {
+            base_type = type_pool->getArrayType(base_type);
+            if (_next() != '[') {
+                throw ParseExpectErrorException(
+                    location,
+                    "array length",
+                    _tokenLiteral()
+                );
+            }
+        }
+        parseExpression();
+
+        if (is_left_value) {
+            result_inst = current_block->LoadInst(last_type, result_inst);
+        }
+        if (!last_type->is<SignedIntegerType>() && !last_type->is<UnsignedIntegerType>()) {
+            throw ParseTypeErrorException(
+                location,
+                "array length must be a integer"
+            );
+        }
+
+        if (
+            base_type->is<StructType>() ||
+            base_type->is<ConceptType>() ||
+            base_type->is<ArrayType>()
+        ) {
+            size = CYAN_PRODUCT_BITS / 8;
+        }
+
+        auto size_inst = current_block->MulInst(
+            type_pool->getUnsignedIntegerType(CYAN_PRODUCT_BITS),
+            current_block->UnsignedImmInst(
+                type_pool->getUnsignedIntegerType(CYAN_PRODUCT_BITS),
+                size
+            ),
+            result_inst
+        );
+        result_inst = current_block->NewInst(
+            type_pool->getArrayType(base_type),
+            size_inst
+        );
+        last_type = type_pool->getArrayType(base_type);
+        is_left_value = false;
+
+        if (_peak() != ']') {
+            throw ParseExpectErrorException(
+                location,
+                "`]`",
+                _tokenLiteral()
+            );
+        }
+        _next();
+    }
+    else {
+        if (!base_type->is<StructType>()) {
+            throw ParseTypeErrorException(
+                location,
+                "type " + base_type->to_string() + " is not a completed struct"
+            );
+        }
+
+        result_inst = current_block->NewInst(
+            base_type,
+            current_block->UnsignedImmInst(
+                type_pool->getUnsignedIntegerType(CYAN_PRODUCT_BITS),
+                size
+            )
+        );
+        last_type = base_type;
+        is_left_value = false;
     }
 }
 
