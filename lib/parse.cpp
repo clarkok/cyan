@@ -818,6 +818,17 @@ Parser::parseConceptDefine()
     }
     _next();
 
+    builder.addMethod(
+        "__delete",
+        MethodType::fromFunction(
+            builder.get(),
+            FunctionType::Builder().release(
+                type_pool->getPointerType(type_pool->getVoidType())
+            )
+        ),
+        nullptr
+    );
+
     if (forward_decl) {
         forward_decl->type = builder.commit();
     }
@@ -1067,10 +1078,38 @@ Parser::parseImplDefine()
 
     for (auto &m : *casted_struct_type) {
         if (!m.impl) {
-            throw ParseErrorException(
-                location,
-                "method `" + m.name + "` not implemented"
-            );
+            if (m.name == "__delete") {
+                auto function_builder = ir_builder->newFunction(
+                    concept_type->getName() + "$" + struct_type->getName() + "::__delete",
+                    m.prototype
+                );
+                auto entry_block = function_builder->newBasicBlock(0, "entry");
+                entry_block->RetInst(
+                    type_pool->getPointerType(type_pool->getVoidType()),
+                    entry_block->SubInst(
+                        type_pool->getPointerType(type_pool->getVoidType()),
+                        entry_block->LoadInst(
+                            type_pool->getPointerType(type_pool->getVoidType()),
+                            entry_block->ArgInst(
+                                type_pool->getPointerType(
+                                    type_pool->getCastedStructType(struct_type, concept_type)
+                                ),
+                                0
+                            )
+                        ),
+                        entry_block->SignedImmInst(
+                            type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                            struct_type->getConceptOffset(concept_type->getName())
+                        )
+                    )
+                );
+            }
+            else {
+                throw ParseErrorException(
+                    location,
+                    "method `" + m.name + "` not implemented"
+                );
+            }
         }
     }
 }
