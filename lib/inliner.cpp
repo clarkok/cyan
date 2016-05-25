@@ -284,12 +284,11 @@ Inliner::resortFunctions()
 void
 Inliner::unusedFunctionEliminate()
 {
-    std::set<Function *> used_func(
-        {
-            ir->function_table["main"].get(),
-            ir->function_table["_init_"].get()
-        }
-    );
+    std::set<Function *> used_func({ ir->function_table["_init_"].get() });
+
+    if (ir->function_table.find("main") != ir->function_table.end()) {
+        used_func.emplace(ir->function_table["main"].get());
+    }
 
     ir->type_pool->foreachCastedStructType(
         [&used_func](CastedStructType *casted) {
