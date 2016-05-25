@@ -143,7 +143,7 @@ struct OffsetMemoryOperand : public MemoryOperand
 
     virtual std::string
     to_string() const
-    { assert(false); }  // TODO
+    { return "QWORD PTR [" + base->to_string() + (offset ? "%%offset" : "") + "]"; }
 };
 
 struct StackMemoryOperand : public MemoryOperand

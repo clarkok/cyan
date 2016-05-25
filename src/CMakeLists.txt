@@ -1,3 +1,5 @@
+include_directories(${PROJECT_SOURCE_DIR}/lib)
+
 set(PROJECT_SRCS main.cpp)
 add_executable(cyanc ${PROJECT_SRCS})
 

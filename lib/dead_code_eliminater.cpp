@@ -84,6 +84,12 @@ DeadCodeEliminater::_scanner(Instruction *inst)
             _scanner(branch.value);
         }
     }
+    else if (inst->is<DeleteInst>()) {
+        _scanner(inst->to<DeleteInst>()->getTarget());
+    }
+    else if (inst->is<NewInst>()) {
+        _scanner(inst->to<NewInst>()->getSpace());
+    }
     else if (inst->is<ImmediateInst>()) {
     }
     else {
