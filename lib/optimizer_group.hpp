@@ -45,6 +45,7 @@ template <class... Optimizers>
 OptimizerWrapper OptimizerGroup<Optimizers...>::wrappers[] = { optimize_with<Optimizers>... };
 
 typedef OptimizerGroup<
+    DeadCodeEliminater
     > OptimizerLevel0;
 
 typedef OptimizerGroup<

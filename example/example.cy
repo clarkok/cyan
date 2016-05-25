@@ -32,3 +32,9 @@ function newStudent(name : i8[], id : i32, age : i32) : Student {
 
     return ret;
 }
+
+function main() {
+    let name = new i8[10];
+    let student = newStudent(name, 1, 2);
+    student.Person.getName();
+}
