@@ -209,7 +209,7 @@ struct Label : public Instruction
 
     virtual std::string
     to_string() const
-    { return "\n" + CodeGenX64::escapeAsmName(name) + ":"; }
+    { return CodeGenX64::escapeAsmName(name) + ":"; }
 
     virtual void registerAllocate(cyan::CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
@@ -754,10 +754,13 @@ CodeGenX64::generate(std::ostream &os)
            << func_name << ":" << std::endl;
 
         generateFunc(func.second.get());
+        writeFunctionHeader(func.second.get(), os);
 
         for (auto &inst_ptr : inst_list) {
             os << "\t" << inst_ptr->to_string() << "\n";
         }
+
+        writeFunctionFooter(func.second.get(), os);
 
         os << func_name << ".end:\n"
            << "\t.size " << func_name << ", .-"
@@ -861,18 +864,87 @@ CodeGenX64::generateFunc(Function *func)
                 if (block_ptr->then_block != std::next(block_iter)->get()) {
                     block_map[block_ptr]->inst_list.emplace_back(new X64::Jmp(
                         std::make_shared<X64::LabelOperand>(
-                            func->getName() + "." + block_ptr->then_block->getName()
+                            escapeAsmName(func->getName() + "." + block_ptr->then_block->getName())
                         )
                     ));
                 }
             }
             else {
-                block_map[block_ptr]->inst_list.emplace_back(new X64::Ret());
+                if (std::next(block_iter) != func->block_list.end()) {
+                    block_map[block_ptr]->inst_list.emplace_back(new X64::Jmp(
+                        std::make_shared<X64::LabelOperand>(
+                            escapeAsmName(func->getName()) + "_exit"
+                        )
+                    ));
+                }
             }
         }
 #undef tail_condition_jump
     }
     allocateRegisters();
+}
+
+void
+CodeGenX64::writeFunctionHeader(Function *func, std::ostream &os)
+{
+    os << "\tpush %rbp\n"
+       << "\tmove %rbp, %rsp\n";
+
+    if (func->getName() != "_init_") {
+#define push_argument(__i, __reg)                       \
+        if (func->prototype->arguments_size() >= __i) { \
+            os << "\tpush " __reg "\n";                 \
+        }
+
+        push_argument(0, "%rdi");
+        push_argument(1, "%rsi");
+        push_argument(2, "%rdx");
+        push_argument(3, "%rcx");
+        push_argument(4, "%r8");
+        push_argument(5, "%r9");
+
+#undef push_arguemnt
+    }
+
+    os << "\tsub %rsp, " << stack_allocate_counter * 8 << "\n";
+
+#define push_caller_regs(__reg)                                 \
+    if (used_registers.find(__reg) != used_registers.end()) {   \
+        os << "\tpush " + X64::to_string(__reg) + "\n";         \
+    }
+
+    push_caller_regs(X64::Register::RBX);
+    push_caller_regs(X64::Register::R12);
+    push_caller_regs(X64::Register::R13);
+    push_caller_regs(X64::Register::R14);
+    push_caller_regs(X64::Register::R15);
+
+#undef push_caller_regs
+}
+
+void
+CodeGenX64::writeFunctionFooter(Function *func, std::ostream &os)
+{
+    os << escapeAsmName(func->getName()) + "_exit:\n";
+
+    if (func->getName() != "_init_") {
+#define pop_caller_regs(__reg)                                      \
+        if (used_registers.find(__reg) != used_registers.end()) {   \
+            os << "\tpop " + X64::to_string(__reg) + "\n";          \
+        }
+
+        pop_caller_regs(X64::Register::R15);
+        pop_caller_regs(X64::Register::R14);
+        pop_caller_regs(X64::Register::R13);
+        pop_caller_regs(X64::Register::R12);
+        pop_caller_regs(X64::Register::RBX);
+
+#undef pop_caller_regs
+    }
+
+    os << "\tmove %rsp, %rbp\n"
+       << "\tpop %rbp\n"
+       << "\tret\n";
 }
 
 void
@@ -1027,6 +1099,7 @@ CodeGenX64::allocateRegisters()
     }
     available_slots.clear();
     current_mapped_register.clear();
+    used_registers.clear();
 
     for (auto &inst_ptr : inst_list) {
         inst_ptr->registerAllocate(this);
@@ -1064,6 +1137,7 @@ CodeGenX64::allocateAll(const std::set<X64::Register> &skip_list, X64::Operand *
 
         available_registers.erase(available_registers.begin());
         current_mapped_register.emplace(reg, operand);
+        used_registers.emplace(reg);
 
         return new X64::RegisterOperand(reg);
     }
@@ -1130,6 +1204,8 @@ void
 CodeGenX64::requestRegister(X64::Register reg, X64::Operand *operand)
 {
     if (reg >= X64::Register::RBP) { return; }
+
+    used_registers.emplace(reg);
 
     auto victim = current_mapped_register[reg];
     if (victim == operand) { return; }

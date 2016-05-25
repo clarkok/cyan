@@ -126,10 +126,13 @@ private:
     std::set<X64::Register> available_registers;
     std::set<int> available_slots;
     std::map<X64::Register, X64::Operand *> current_mapped_register;
+    std::set<X64::Register> used_registers;
 
     void registerValueLiveRange(X64::Operand *value, int loop_depth);
 
     void generateFunc(Function *func);
+    void writeFunctionHeader(Function *func, std::ostream &os);
+    void writeFunctionFooter(Function *func, std::ostream &os);
     void registerValueLiveRangeOfInst(X64::Instruction *inst, int loop_depth);
     void allocateRegisters();
 
