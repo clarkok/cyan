@@ -104,8 +104,9 @@ public:
     static const int MEMORY_OPERATION_COST = 10;
 
     typedef size_t Position;
-
     typedef std::pair<Position, Position> LiveRange;
+
+    static std::string escapeAsmName(std::string original);
 
 private:
     std::map<Instruction *, size_t> inst_used;

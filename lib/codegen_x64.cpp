@@ -6,6 +6,7 @@
 #include <memory>
 #include <set>
 #include <map>
+#include <cctype>
 
 #include "codegen_x64.hpp"
 
@@ -182,7 +183,7 @@ struct LabelOperand : public Operand
 
     virtual std::string
     to_string() const
-    { return name; }
+    { return CodeGenX64::escapeAsmName(name); }
 };
 
 struct ImmediateOperand : public Operand
@@ -208,7 +209,7 @@ struct Label : public Instruction
 
     virtual std::string
     to_string() const
-    { return "\n" + name + ":"; }
+    { return "\n" + CodeGenX64::escapeAsmName(name) + ":"; }
 
     virtual void registerAllocate(cyan::CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
@@ -713,6 +714,26 @@ struct Xor : public Instruction
 
 }
 
+std::string
+CodeGenX64::escapeAsmName(std::string original)
+{
+    std::string ret;
+
+    for (auto ch : original) {
+        if (std::isalnum(ch) || ch == '_') {
+            ret.push_back(ch);
+        }
+        else if (ch == '.') {
+            ret.push_back('_');
+        }
+        else {
+            ret.push_back('$');
+        }
+    }
+
+    return ret;
+}
+
 std::ostream &
 CodeGenX64::generate(std::ostream &os)
 {
@@ -720,15 +741,17 @@ CodeGenX64::generate(std::ostream &os)
 
     os << ".data" << std::endl;
     for (auto &global : ir->global_defines) {
-        os << "\t" << global.first << ":\t.quad 0" << std::endl;
+        os << "\t" << escapeAsmName(global.first) << ":\t.quad 0" << std::endl;
     }
 
     os << std::endl << ".text" << std::endl;
     for (auto &func : ir->function_table) {
         current_func = func.second.get();
-        os << "\t.globl " << func.first << "\n"
-           << "\t.type " << func.first << " @function\n"
-           << func.first << ":" << std::endl;
+        auto func_name = escapeAsmName(func.first);
+
+        os << "\t.globl " << func_name << "\n"
+           << "\t.type " << func_name << " @function\n"
+           << func_name << ":" << std::endl;
 
         generateFunc(func.second.get());
 
@@ -736,8 +759,9 @@ CodeGenX64::generate(std::ostream &os)
             os << "\t" << inst_ptr->to_string() << "\n";
         }
 
-        os << func.first << ".end:\n"
-           << "\t.size " << func.first << ", .-" << func.first << "\n" << std::endl;
+        os << func_name << ".end:\n"
+           << "\t.size " << func_name << ", .-"
+           << func_name << "\n" << std::endl;
     }
 
     return os;
