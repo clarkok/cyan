@@ -240,6 +240,9 @@ struct Label : public Instruction
     { return "\n" + CodeGenX64::escapeAsmName(name) + ":"; }
 
     virtual void registerAllocate(cyan::CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Mov : public Instruction
@@ -255,6 +258,17 @@ struct Mov : public Instruction
     { return "mov " + dst->to_string() + ", " + src->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    {
+        if (dst->is<MemoryOperand>() && src->is<MemoryOperand>()) {
+            list.emplace(
+                iter,
+                new X64::Mov(temp_reg, src)
+            );
+            src = temp_reg;
+        }
+    }
 };
 
 struct Add : public Instruction
@@ -270,6 +284,17 @@ struct Add : public Instruction
     { return "add " + dst->to_string() + ", " + src->to_string(); };
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    {
+        if (dst->is<MemoryOperand>() && src->is<MemoryOperand>()) {
+            list.emplace(
+                iter,
+                new X64::Mov(temp_reg, src)
+            );
+            src = temp_reg;
+        }
+    }
 };
 
 struct And : public Instruction
@@ -285,6 +310,17 @@ struct And : public Instruction
     { return "and " + dst->to_string() + ", " + src->to_string(); };
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    {
+        if (dst->is<MemoryOperand>() && src->is<MemoryOperand>()) {
+            list.emplace(
+                iter,
+                new X64::Mov(temp_reg, src)
+            );
+            src = temp_reg;
+        }
+    }
 };
 
 struct Call : public Instruction
@@ -300,6 +336,9 @@ struct Call : public Instruction
     { return "call " + func->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct CallPreserve : public Instruction
@@ -315,6 +354,9 @@ struct CallPreserve : public Instruction
     { return "// preserving"; }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct CallRestore : public Instruction
@@ -330,6 +372,9 @@ struct CallRestore : public Instruction
     { return "// restoring"; }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Cmp : public Instruction
@@ -345,6 +390,17 @@ struct Cmp : public Instruction
     { return "cmp " + left->to_string() + ", " + right->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    {
+        if (left->is<MemoryOperand>() && right->is<MemoryOperand>()) {
+            list.emplace(
+                iter,
+                new X64::Mov(temp_reg, right)
+            );
+            right = temp_reg;
+        }
+    }
 };
 
 struct Idiv : public Instruction
@@ -359,6 +415,17 @@ struct Idiv : public Instruction
     virtual std::string to_string() const = 0;
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    {
+        if (dst->is<MemoryOperand>() && src->is<MemoryOperand>()) {
+            list.emplace(
+                iter,
+                new X64::Mov(temp_reg, src)
+            );
+            src = temp_reg;
+        }
+    }
 };
 
 struct Imod : public Instruction
@@ -373,6 +440,17 @@ struct Imod : public Instruction
     virtual std::string to_string() const = 0;
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    {
+        if (dst->is<MemoryOperand>() && src->is<MemoryOperand>()) {
+            list.emplace(
+                iter,
+                new X64::Mov(temp_reg, src)
+            );
+            src = temp_reg;
+        }
+    }
 };
 
 struct Imul : public Instruction
@@ -388,6 +466,17 @@ struct Imul : public Instruction
     { return "imul " + dst->to_string() + ", " + src->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    {
+        if (dst->is<MemoryOperand>() && src->is<MemoryOperand>()) {
+            list.emplace(
+                iter,
+                new X64::Mov(temp_reg, src)
+            );
+            src = temp_reg;
+        }
+    }
 };
 
 struct Jmp : public Instruction
@@ -403,6 +492,9 @@ struct Jmp : public Instruction
     { return "jmp " + label->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Je : public Instruction
@@ -418,6 +510,9 @@ struct Je : public Instruction
     { return "je " + label->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Jne : public Instruction
@@ -433,6 +528,9 @@ struct Jne : public Instruction
     { return "jne " + label->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Jg : public Instruction
@@ -448,6 +546,9 @@ struct Jg : public Instruction
     { return "jg " + label->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Jge : public Instruction
@@ -463,6 +564,9 @@ struct Jge : public Instruction
     { return "jge " + label->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Jl : public Instruction
@@ -478,6 +582,9 @@ struct Jl : public Instruction
     { return "jl " + label->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Jle : public Instruction
@@ -493,6 +600,9 @@ struct Jle : public Instruction
     { return "jle " + label->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct LeaOffset : public Instruction
@@ -516,6 +626,9 @@ struct LeaOffset : public Instruction
     }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct LeaGlobal : public Instruction
@@ -534,6 +647,9 @@ struct LeaGlobal : public Instruction
     { return "lea " + dst->to_string() + ", " + global->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Neg : public Instruction
@@ -549,6 +665,9 @@ struct Neg : public Instruction
     { return "neg " + dst->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Not : public Instruction
@@ -564,6 +683,9 @@ struct Not : public Instruction
     { return "not " + dst->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Or : public Instruction
@@ -579,6 +701,17 @@ struct Or : public Instruction
     { return "or " + dst->to_string() + ", " + src->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    {
+        if (dst->is<MemoryOperand>() && src->is<MemoryOperand>()) {
+            list.emplace(
+                iter,
+                new X64::Mov(temp_reg, src)
+            );
+            src = temp_reg;
+        }
+    }
 };
 
 struct Pop : public Instruction
@@ -594,6 +727,9 @@ struct Pop : public Instruction
     { return "pop " + dst->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Push : public Instruction
@@ -609,6 +745,9 @@ struct Push : public Instruction
     { return "push " + src->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Ret : public Instruction
@@ -624,6 +763,9 @@ struct Ret : public Instruction
     { return "ret"; }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Sal : public Instruction
@@ -639,6 +781,9 @@ struct Sal : public Instruction
     { return "sal " + dst->to_string() + ", " + src->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Sar : public Instruction
@@ -654,6 +799,9 @@ struct Sar : public Instruction
     { return "sar " + dst->to_string() + ", " + src->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct SetE : public Instruction
@@ -669,6 +817,9 @@ struct SetE : public Instruction
     { return "sete " + dst->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct SetL : public Instruction
@@ -684,6 +835,9 @@ struct SetL : public Instruction
     { return "setl " + dst->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct SetLe : public Instruction
@@ -699,6 +853,9 @@ struct SetLe : public Instruction
     { return "setle " + dst->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Shr : public Instruction
@@ -714,6 +871,9 @@ struct Shr : public Instruction
     { return "sar " + dst->to_string() + ", " + src->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    { }
 };
 
 struct Sub : public Instruction
@@ -729,6 +889,17 @@ struct Sub : public Instruction
     { return "sub " + dst->to_string() + ", " + src->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    {
+        if (dst->is<MemoryOperand>() && src->is<MemoryOperand>()) {
+            list.emplace(
+                iter,
+                new X64::Mov(temp_reg, src)
+            );
+            src = temp_reg;
+        }
+    }
 };
 
 struct Xor : public Instruction
@@ -744,6 +915,17 @@ struct Xor : public Instruction
     { return "xor " + dst->to_string() + ", " + src->to_string(); }
 
     virtual void registerAllocate(CodeGenX64 *codegen) { codegen->registerAllocate(this); }
+    virtual void
+    resolveTooManyMemoryLocations(InstList &list, InstIterator iter, SharedOperand &temp_reg)
+    {
+        if (dst->is<MemoryOperand>() && src->is<MemoryOperand>()) {
+            list.emplace(
+                iter,
+                new X64::Mov(temp_reg, src)
+            );
+            src = temp_reg;
+        }
+    }
 };
 
 }
@@ -806,6 +988,8 @@ CodeGenX64::generate(std::ostream &os)
            << func_name << ":" << std::endl;
 
         generateFunc(func.second.get());
+        allocateRegisters();
+
         writeFunctionHeader(func.second.get(), os);
 
         for (auto &inst_ptr : inst_list) {
@@ -933,7 +1117,6 @@ CodeGenX64::generateFunc(Function *func)
         }
 #undef tail_condition_jump
     }
-    allocateRegisters();
 }
 
 void
@@ -1160,8 +1343,15 @@ CodeGenX64::allocateRegisters()
     current_mapped_register.clear();
     used_registers.clear();
 
-    for (auto &inst_ptr : inst_list) {
-        inst_ptr->registerAllocate(this);
+    auto rax = std::shared_ptr<X64::Operand>(new X64::RegisterOperand(X64::Register::RAX));
+
+    for (
+        auto inst_iter = inst_list.begin();
+        inst_iter != inst_list.end();
+        ++inst_iter
+    ) {
+        (*inst_iter)->registerAllocate(this);
+        (*inst_iter)->resolveTooManyMemoryLocations(inst_list, inst_iter, rax);
         ++current_inst_index;
     }
 }

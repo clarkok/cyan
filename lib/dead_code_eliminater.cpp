@@ -24,7 +24,8 @@ DeadCodeEliminater::scanInstReference(Function *func)
             if (
                 inst_ptr->is<CallInst>() ||
                 inst_ptr->is<RetInst>() ||
-                inst_ptr->is<StoreInst>()
+                inst_ptr->is<StoreInst>() ||
+                inst_ptr->is<DeleteInst>()
             ) {
                 _scanner(inst_ptr.get());
             }

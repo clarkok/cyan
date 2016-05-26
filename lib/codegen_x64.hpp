@@ -53,6 +53,10 @@ class CodeGenX64;
 
 namespace X64 {
 
+typedef std::list<std::unique_ptr<struct Instruction> > InstList;
+typedef InstList::iterator InstIterator;
+typedef std::shared_ptr<struct Operand> SharedOperand;
+
 struct Instruction
 {
     virtual ~Instruction() = default;
@@ -71,6 +75,11 @@ struct Instruction
     { return to<T>() != nullptr; }
 
     virtual void registerAllocate(cyan::CodeGenX64 *codegen) = 0;
+    virtual void resolveTooManyMemoryLocations(
+        InstList &list,
+        InstIterator iter,
+        std::shared_ptr<struct X64::Operand> &temp_reg
+    ) = 0;
 };
 
 #define forward_define_inst(inst)   \
@@ -116,7 +125,7 @@ private:
     std::map<AllocaInst *, int> allocate_map;
     int stack_allocate_counter = 0;
 
-    std::vector<std::unique_ptr<X64::Instruction> > inst_list;
+    std::list<std::unique_ptr<X64::Instruction> > inst_list;
     std::map<X64::Operand *, LiveRange> live_range;
     std::map<LiveRange, X64::Operand *> live_range_r;
     std::map<X64::Operand *, size_t> operand_swap_out_cost;
