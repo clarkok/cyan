@@ -16,10 +16,8 @@ namespace X64 {
 
 enum class Register
 {
-    RAX,
     RBX,
     RCX,
-    RDX,
     RSI,
     RDI,
     R8,
@@ -31,19 +29,17 @@ enum class Register
     R14,
     R15,
     RBP,
-    RSP
+    RSP,
+    RAX,    // treat RAX,RDX as a reserved register
+    RDX
 };
+
+#define GP_REG_START    ::X64::Register::RBX
+#define GP_REG_END      ::X64::Register::RBP
 
 inline Register
 next(Register reg)
 { return static_cast<Register>(static_cast<std::underlying_type<Register>::type>(reg) + 1); }
-
-#define register_foreach(__r)                                       \
-    for (                                                           \
-        X64::Register __r = X64::Register::RBX;                     \
-        __r != X64::Register::R15;                                  \
-        __r = static_cast<X64::Register>(static_cast<int>(__r) + 1) \
-    )
 
 std::string
 to_string(Register reg)
@@ -165,15 +161,18 @@ struct MemoryOperand : public Operand
 
 struct OffsetMemoryOperand : public MemoryOperand
 {
-    std::shared_ptr<Operand> base, offset;
+    std::shared_ptr<Operand> base;
+    intptr_t offset;
 
-    OffsetMemoryOperand(std::shared_ptr<Operand> base, std::shared_ptr<Operand> offset)
+    OffsetMemoryOperand(std::shared_ptr<Operand> base, intptr_t offset)
         : base(base), offset(offset)
     { }
 
     virtual std::string
     to_string() const
-    { return "QWORD PTR [" + base->to_string() + (offset ? "%%offset" : "") + "]"; }
+    {
+        return "QWORD PTR [" + base->to_string() + (offset >= 0 ? "+" : "") + std::to_string(offset) + "]";
+    }
 };
 
 struct StackMemoryOperand : public MemoryOperand
@@ -238,7 +237,7 @@ struct Label : public Instruction
 
     virtual std::string
     to_string() const
-    { return CodeGenX64::escapeAsmName(name) + ":"; }
+    { return "\n" + CodeGenX64::escapeAsmName(name) + ":"; }
 
     virtual void registerAllocate(cyan::CodeGenX64 *codegen) { codegen->registerAllocate(this); }
 };
@@ -290,10 +289,10 @@ struct And : public Instruction
 
 struct Call : public Instruction
 {
-    std::shared_ptr<Operand> func;
+    std::shared_ptr<Operand> func, rax;
 
-    Call(std::shared_ptr<Operand> label)
-        : func(label)
+    Call(std::shared_ptr<Operand> func, std::shared_ptr<Operand> rax)
+        : func(func), rax(rax)
     { }
 
     virtual std::string
@@ -614,6 +613,12 @@ struct Push : public Instruction
 
 struct Ret : public Instruction
 {
+    std::shared_ptr<Operand> rax;
+
+    Ret(std::shared_ptr<Operand> rax)
+        : rax(rax)
+    { }
+
     virtual std::string
     to_string() const
     { return "ret"; }
@@ -768,16 +773,28 @@ CodeGenX64::generate(std::ostream &os)
 {
     os << ".intel_syntax" << std::endl;
 
-    os << ".data" << std::endl;
-    for (auto &global : ir->global_defines) {
-        os << "\t" << escapeAsmName(global.first) << ":\t.quad 0" << std::endl;
+    if (ir->global_defines.size()) {
+        os << "\n.data" << std::endl;
+        for (auto &global : ir->global_defines) {
+            os << "\t" << escapeAsmName(global.first) << ":\t.quad 0" << std::endl;
+        }
+        os << std::endl;
     }
 
-    os << ".rodata" << std::endl;
-    for (auto &string_pair : ir->string_pool) {
-        os << "\t" << string_pair.first << ":\tstring " <<
+    if (ir->string_pool.size()) {
+        os << "\n.section .rodata" << std::endl;
+        for (auto &string_pair : ir->string_pool) {
+            os << "\t" << string_pair.first << ":\tstring " <<
             X64::escape_string(string_pair.second) << std::endl;
+        }
     }
+
+    ir->type_pool->foreachCastedStructType([&os](CastedStructType *casted) {
+        os << "\n.section .rodata" << std::endl << escapeAsmName(casted->to_string() + "__vtable") << ":\n";
+        for (auto &method : *casted) {
+            os << "\t.quad " << escapeAsmName(method.impl->name) << "\n";
+        }
+    });
 
     os << std::endl << ".text" << std::endl;
     for (auto &func : ir->function_table) {
@@ -923,7 +940,7 @@ void
 CodeGenX64::writeFunctionHeader(Function *func, std::ostream &os)
 {
     os << "\tpush %rbp\n"
-       << "\tmove %rbp, %rsp\n";
+       << "\tmov %rbp, %rsp\n";
 
     if (func->getName() != "_init_") {
 #define push_argument(__i, __reg)                       \
@@ -960,7 +977,7 @@ CodeGenX64::writeFunctionHeader(Function *func, std::ostream &os)
 void
 CodeGenX64::writeFunctionFooter(Function *func, std::ostream &os)
 {
-    os << escapeAsmName(func->getName()) + "_exit:\n";
+    os << "\n" << escapeAsmName(func->getName()) + "_exit:\n";
 
     if (func->getName() != "_init_") {
 #define pop_caller_regs(__reg)                                      \
@@ -977,7 +994,7 @@ CodeGenX64::writeFunctionFooter(Function *func, std::ostream &os)
 #undef pop_caller_regs
     }
 
-    os << "\tmove %rsp, %rbp\n"
+    os << "\tmov %rsp, %rbp\n"
        << "\tpop %rbp\n"
        << "\tret\n";
 }
@@ -998,7 +1015,7 @@ CodeGenX64::registerValueLiveRange(X64::Operand *value, int loop_depth)
         else {
             live_range.at(value).second = inst_list.size();
         }
-        operand_swap_out_cost[value] += MEMORY_OPERATION_COST << (loop_depth * 8);
+        operand_swap_out_cost[value] += MEMORY_OPERATION_COST << (loop_depth * 4);
     }
 }
 
@@ -1077,6 +1094,13 @@ CodeGenX64::registerValueLiveRangeOfInst(X64::Instruction *inst, int loop_depth)
         registerValueLiveRange(inst->to<X64::Xor>()->dst.get(), loop_depth);
         registerValueLiveRange(inst->to<X64::Xor>()->src.get(), loop_depth);
     }
+    else if (inst->is<X64::Call>()) {
+        registerValueLiveRange(inst->to<X64::Call>()->rax.get(), loop_depth);
+        registerValueLiveRange(inst->to<X64::Call>()->func.get(), loop_depth);
+    }
+    else if (inst->is<X64::Ret>()) {
+        registerValueLiveRange(inst->to<X64::Ret>()->rax.get(), loop_depth);
+    }
 }
 
 void
@@ -1129,7 +1153,7 @@ CodeGenX64::allocateRegisters()
 
     current_inst_index = 0;
     available_registers.clear();
-    for (auto reg = X64::Register::RAX; reg < X64::Register::RBP; reg = X64::next(reg)) {
+    for (auto reg = GP_REG_START; reg < GP_REG_END; reg = X64::next(reg)) {
         available_registers.emplace(reg);
     }
     available_slots.clear();
@@ -1182,8 +1206,8 @@ CodeGenX64::allocateAll(const std::set<X64::Register> &skip_list, X64::Operand *
     size_t cost = operand_swap_out_cost[operand];
 
     for (
-        auto reg = X64::Register::RAX;
-        reg < X64::Register::RBP;
+        auto reg = GP_REG_START;
+        reg < GP_REG_END;
         reg = X64::next(reg)
     ) {
         if (skip_list.find(reg) == skip_list.end()) {
@@ -1222,7 +1246,7 @@ CodeGenX64::freeAll(X64::Operand *operand)
 {
     if (operand->is<X64::RegisterOperand>()) {
         auto reg = operand->to<X64::RegisterOperand>()->reg;
-        if (reg >= X64::Register::RBP) { return; }
+        if (reg >= GP_REG_END) { return; }
 
         current_mapped_register.erase(reg);
         available_registers.emplace(reg);
@@ -1238,7 +1262,7 @@ CodeGenX64::freeAll(X64::Operand *operand)
 void
 CodeGenX64::requestRegister(X64::Register reg, X64::Operand *operand)
 {
-    if (reg >= X64::Register::RBP) { return; }
+    if (reg >= GP_REG_END) { return; }
 
     used_registers.emplace(reg);
 
@@ -1538,7 +1562,7 @@ CodeGenX64::resolveMemory(Instruction *inst)
         return std::shared_ptr<X64::Operand>(
             new X64::OffsetMemoryOperand(
                 inst_result.at(inst),
-                nullptr
+                0
             )
         );
     }
@@ -1846,7 +1870,10 @@ CodeGenX64::gen(CallInst *inst)
         func = inst_result.at(inst->getFunction());
     }
 
-    auto call_inst = new X64::Call(func);
+    auto call_inst = new X64::Call(
+        func,
+        std::shared_ptr<X64::Operand>(new X64::RegisterOperand(X64::Register::RAX))
+    );
 
 #define call_set_argument_register(__i, __r)                                            \
     do {                                                                                \
@@ -1904,7 +1931,7 @@ CodeGenX64::gen(CallInst *inst)
     block_map[inst->getOwnerBlock()]->inst_list.emplace_back(call_inst);
     block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
         inst_result.at(inst),
-        std::shared_ptr<X64::Operand>(new X64::RegisterOperand(X64::Register::RAX))
+        call_inst->rax
     ));
     block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::CallRestore(call_inst));
 }
@@ -1944,7 +1971,10 @@ void
 CodeGenX64::gen(NewInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-    auto call_inst = new X64::Call(std::shared_ptr<X64::Operand>(new X64::LabelOperand("malloc")));
+    auto call_inst = new X64::Call(
+        std::shared_ptr<X64::Operand>(new X64::LabelOperand("malloc")),
+        std::shared_ptr<X64::Operand>(new X64::RegisterOperand(X64::Register::RAX))
+    );
 
     if (inst_result.find(inst->getSpace()) != inst_result.end()) {
         block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
@@ -1964,15 +1994,49 @@ CodeGenX64::gen(NewInst *inst)
     block_map[inst->getOwnerBlock()]->inst_list.emplace_back(call_inst);
     block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
         inst_result.at(inst),
-        std::shared_ptr<X64::Operand>(new X64::RegisterOperand(X64::Register::RAX))
+        call_inst->rax
     ));
     block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::CallRestore(call_inst));
+
+    if (inst->getType()->is<StructType>()) {
+        auto struct_type = inst->getType()->to<StructType>();
+        auto rax = std::shared_ptr<X64::Operand>(new X64::RegisterOperand(X64::Register::RAX));
+        auto rdx = std::shared_ptr<X64::Operand>(new X64::RegisterOperand(X64::Register::RDX));
+        for (size_t i = 0; i < struct_type->concept_size(); ++i) {
+            block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
+                rax,
+                inst_result.at(inst)
+            ));
+            block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
+                rdx,
+                std::shared_ptr<X64::Operand>(new X64::LabelOperand(
+                    escapeAsmName(
+                        ir->type_pool->getCastedStructType(
+                            struct_type,
+                            struct_type->getConceptByOffset(static_cast<int>(
+                                                                struct_type->members_size() + i))
+                        )->to_string() + "__vtable"
+                    )
+                ))
+            ));
+            block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
+                std::shared_ptr<X64::Operand>(new X64::OffsetMemoryOperand(
+                    rax,
+                    (struct_type->members_size() + i) * 8
+                )),
+                rdx
+            ));
+        }
+    }
 }
 
 void
 CodeGenX64::gen(DeleteInst *inst)
 {
-    auto call_inst = new X64::Call(std::shared_ptr<X64::Operand>(new X64::LabelOperand("free")));
+    auto call_inst = new X64::Call(
+        std::shared_ptr<X64::Operand>(new X64::LabelOperand("free")),
+        std::shared_ptr<X64::Operand>(new X64::RegisterOperand(X64::Register::RAX))
+    );
 
     if (inst_result.find(inst->getTarget()) != inst_result.end()) {
         block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(

@@ -480,6 +480,10 @@ public:
         return false;
     }
 
+    inline auto
+    concept_size() const -> decltype(concepts.size())
+    { return concepts.size(); }
+
     inline std::string
     getName() const
     { return name; }
