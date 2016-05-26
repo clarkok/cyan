@@ -74,6 +74,35 @@ to_string(Register reg)
     assert(false);
 }
 
+std::string
+escape_string(std::string content)
+{
+    std::string ret = "\"";
+    for (auto &ch : content) {
+        if (std::isprint(ch)) {
+            ret.push_back(ch);
+        }
+        else {
+            ret.push_back('\\');
+            switch (ch) {
+                case '\t':  ret.push_back('t'); break;
+                case '\f':  ret.push_back('f'); break;
+                case '\v':  ret.push_back('v'); break;
+                case '\n':  ret.push_back('n'); break;
+                case '\r':  ret.push_back('r'); break;
+                case '\\':  ret.push_back('\\'); break;
+                default:
+                    ret.push_back('x');
+                    ret.push_back("0123456789ABCDEF"[ch >> 4]);
+                    ret.push_back("0123456789ABCDEF"[ch & 0xF]);
+                    break;
+            }
+        }
+    }
+    ret.push_back('\"');
+    return ret;
+}
+
 struct Operand
 {
     virtual ~Operand() = default;
@@ -742,6 +771,12 @@ CodeGenX64::generate(std::ostream &os)
     os << ".data" << std::endl;
     for (auto &global : ir->global_defines) {
         os << "\t" << escapeAsmName(global.first) << ":\t.quad 0" << std::endl;
+    }
+
+    os << ".rodata" << std::endl;
+    for (auto &string_pair : ir->string_pool) {
+        os << "\t" << string_pair.first << ":\tstring " <<
+            X64::escape_string(string_pair.second) << std::endl;
     }
 
     os << std::endl << ".text" << std::endl;
