@@ -33,6 +33,10 @@ function newStudent(name : i8[], id : i32, age : i32) : Student {
     return ret;
 }
 
+function deletePerson(target : Person) {
+    delete target;
+}
+
 function main() {
     let name = new i8[10];
     let student = newStudent(name, 1, 2);

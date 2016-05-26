@@ -1624,9 +1624,31 @@ Parser::parseDeleteStmt()
         );
     }
 
-    if (
+    if (last_type->is<ConceptType>()) {
+        auto concept_type = last_type->to<ConceptType>();
+        int offset = concept_type->getMethodOffset("__delete");
+        assert(offset != std::numeric_limits<int>::max());
+        auto method = concept_type->getMethodByOffset(offset);
+
+        result_inst = current_block->newCallBuilder(
+            method.prototype->getReturnType(),
+            current_block->LoadInst(
+                method.prototype,
+                current_block->AddInst(
+                    type_pool->getPointerType(method.prototype),
+                    result_inst,
+                    current_block->SignedImmInst(
+                        type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                        offset
+                    )
+                )
+            )
+        )
+        .addArgument(result_inst)
+        .commit();
+    }
+    else if (
         !last_type->is<StructType>() &&
-        !last_type->is<ConceptType>() &&
         !last_type->is<ArrayType>()
     ) {
         throw ParseTypeErrorException(
