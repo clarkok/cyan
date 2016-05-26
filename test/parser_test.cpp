@@ -517,5 +517,19 @@ TEST(parser_test, parse_file_test)
     Parser *uut = new Parser(new ScreenOutputErrorCollector());
     ASSERT_TRUE(uut->parseFile(__PROJECT_DIR__ "/example/example.cy"));
 
-    uut->release()->output(std::cout);
+    // uut->release()->output(std::cout);
+}
+
+TEST(parser_test, parse_string_literal_test)
+{
+    static const char SOURCE[] =
+        "function main() : i8[] {\n"
+        "    return \"test\";\n"
+        "}\n"
+    ;
+
+    Parser *uut = new Parser(new ScreenOutputErrorCollector());
+    ASSERT_TRUE(uut->parse(SOURCE));
+
+    // uut->release()->output(std::cout);
 }

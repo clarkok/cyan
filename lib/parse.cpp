@@ -1103,6 +1103,7 @@ Parser::parseImplDefine()
                         )
                     )
                 );
+                m.impl = function_builder->get();
             }
             else {
                 throw ParseErrorException(
@@ -2580,7 +2581,7 @@ Parser::parsePostfixExpr()
                     );
                 }
                 Type *required_type = *iter++;
-                bool use_left_value = required_type->is<PointerType>();
+                bool use_left_value = required_type->is<PointerType>() && !required_type->is<ArrayType>();
 
                 if (use_left_value) {
                     required_type = required_type->to<PointerType>()->getBaseType();
@@ -2919,7 +2920,7 @@ Parser::parseUnaryExpr()
                     symbol->token_value
                 );
 
-                if (last_type->is<PointerType>()) {
+                if (last_type->is<PointerType>() && !last_type->is<ArrayType>()) {
                     result_inst = current_block->LoadInst(
                         last_type,
                         result_inst
@@ -2951,6 +2952,24 @@ Parser::parseUnaryExpr()
             last_type = result_type;
             is_left_value = false;
             result_inst = current_block->SignedImmInst(result_type, peaking_int);
+
+            _next();
+            break;
+        }
+        case T_STRING:
+        {
+            ir_builder->get()->string_pool.emplace(
+                peaking_string,
+                ".STR_" + std::to_string(ir_builder->get()->string_pool.size())
+            );
+
+            auto result_type = type_pool->getArrayType(type_pool->getSignedIntegerType(CYAN_CHAR_BITS));
+            last_type = result_type;
+            is_left_value = false;
+            result_inst = current_block->GlobalInst(
+                result_type,
+                ir_builder->get()->string_pool.at(peaking_string)
+            );
 
             _next();
             break;

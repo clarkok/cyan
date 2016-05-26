@@ -187,6 +187,10 @@ public:
     std::unique_ptr<FunctionBuilder> findFunction(std::string name);
 
     inline IR *
+    get() const
+    { return product.get(); }
+
+    inline IR *
     release(TypePool *type_pool)
     {
         product->type_pool.reset(type_pool);

@@ -58,6 +58,10 @@ IR::output(std::ostream &os) const
         os << "global " << global.first << "\t: " << global.second->to_string() << std::endl;
     }
 
+    for (auto &string_pair : string_pool) {
+        os << "string " << string_pair.second << "\t: \"" << string_pair.first << "\"" << std::endl;
+    }
+
     os << std::endl;
 
     for (auto &func : function_table) {

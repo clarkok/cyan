@@ -211,6 +211,7 @@ struct IR
 {
     std::map<std::string, std::unique_ptr<Function> > function_table;
     std::map<std::string, Type *> global_defines;
+    std::map<std::string, std::string> string_pool;
     std::unique_ptr<TypePool> type_pool;
 
     IR() = default;

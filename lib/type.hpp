@@ -136,17 +136,12 @@ public:
     virtual bool isSigned() const;
 };
 
-class ArrayType : public Type
+class ArrayType : public PointerType
 {
-    Type *base_type;
 public:
     ArrayType(Type *base_type)
-        : base_type(base_type)
+        : PointerType(base_type)
     { }
-
-    inline Type*
-    getBaseType() const
-    { return base_type; }
 
     virtual size_t size() const;
     virtual std::string to_string() const;
