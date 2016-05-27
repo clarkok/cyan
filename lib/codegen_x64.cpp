@@ -9,6 +9,8 @@
 #include <cctype>
 
 #include "codegen_x64.hpp"
+#include "optimizer.hpp"
+#include "dead_code_eliminater.hpp"
 
 using namespace cyan;
 
@@ -928,6 +930,125 @@ struct Xor : public Instruction
     }
 };
 
+class ResortSwappableOperand : public Optimizer
+{
+public:
+    ResortSwappableOperand(IR *_ir)
+        : Optimizer(_ir)
+    {
+        for (auto &func_pair : ir->function_table) {
+            auto func = func_pair.second.get();
+            for (auto &block_ptr : func->block_list) {
+                for (auto &inst_ptr : block_ptr->inst_list) {
+                    if (
+                        inst_ptr->is<AddInst>() ||
+                        inst_ptr->is<MulInst>() ||
+                        inst_ptr->is<OrInst>() ||
+                        inst_ptr->is<AndInst>() ||
+                        inst_ptr->is<NorInst>() ||
+                        inst_ptr->is<XorInst>() ||
+                        inst_ptr->is<SeqInst>()
+                    ) {
+                        auto binary_inst = inst_ptr->to<BinaryInst>();
+                        if (binary_inst->getLeft()->is<ImmediateInst>()) {
+                            auto t = binary_inst->getLeft();
+                            binary_inst->setLeft(binary_inst->getRight());
+                            binary_inst->setRight(t);
+                        }
+                    }
+                }
+            }
+        }
+    }
+};
+
+class ResolvePointerArithmetic : public Optimizer
+{
+public:
+    ResolvePointerArithmetic(IR *_ir)
+        : Optimizer(_ir)
+    {
+        for (auto &func_pair : ir->function_table) {
+            auto func = func_pair.second.get();
+            for (auto &block_ptr : func->block_list) {
+                for (
+                    auto inst_iter = block_ptr->inst_list.begin();
+                    inst_iter != block_ptr->inst_list.end();
+                    ++inst_iter
+                ) {
+                    if ((*inst_iter)->is<AddInst>()) {
+                        auto add_inst = (*inst_iter)->to<AddInst>();
+                        if (
+                            add_inst->getLeft()->getType()->is<PointerType>() ||
+                            add_inst->getLeft()->getType()->is<ConceptType>() ||
+                            add_inst->getLeft()->getType()->is<StructType>()
+                        ) {
+                            if (add_inst->getRight()->is<SignedImmInst>()) {
+                                block_ptr->inst_list.emplace(
+                                    inst_iter,
+                                    add_inst->setRight(
+                                        new SignedImmInst(
+                                            ir->type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                                            add_inst->getRight()->to<SignedImmInst>()->getValue() * 8,
+                                            block_ptr.get(),
+                                            "$" + std::to_string(
+                                                add_inst->getRight()->to<SignedImmInst>()->getValue() * 8)
+                                        )
+                                    )
+                                );
+                            }
+                            else if (add_inst->getRight()->is<UnsignedImmInst>()) {
+                                block_ptr->inst_list.emplace(
+                                    inst_iter,
+                                    add_inst->setRight(
+                                        new UnsignedImmInst(
+                                            ir->type_pool->getUnsignedIntegerType(CYAN_PRODUCT_BITS),
+                                            add_inst->getRight()->to<UnsignedImmInst>()->getValue() * 8,
+                                            block_ptr.get(),
+                                            "$" + std::to_string(
+                                                add_inst->getRight()->to<UnsignedImmInst>()->getValue() * 8)
+                                        )
+                                    )
+                                );
+                            }
+                            else {
+                                assert(
+                                    add_inst->getRight()->getType()->is<SignedIntegerType>() ||
+                                    add_inst->getRight()->getType()->is<UnsignedIntegerType>()
+                                );
+                                auto imm_inst = new SignedImmInst(
+                                    ir->type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                                    8,
+                                    block_ptr.get(),
+                                    "$8"
+                                );
+                                block_ptr->inst_list.emplace(
+                                    inst_iter,
+                                    imm_inst
+                                );
+                                block_ptr->inst_list.emplace(
+                                    inst_iter,
+                                    add_inst->setRight(
+                                        new MulInst(
+                                            ir->type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                                            add_inst->getRight(),
+                                            imm_inst,
+                                            block_ptr.get(),
+                                            "_" + std::to_string(func->countLocalTemp())
+                                        )
+                                    )
+                                );
+                            }
+                        }
+                    }
+                    else if ((*inst_iter)->is<SubInst>()) {
+                    }
+                }
+            }
+        }
+    }
+};
+
 }
 
 std::string
@@ -953,6 +1074,14 @@ CodeGenX64::escapeAsmName(std::string original)
 std::ostream &
 CodeGenX64::generate(std::ostream &os)
 {
+    ir.reset(
+        DeadCodeEliminater(
+            X64::ResolvePointerArithmetic(
+                X64::ResortSwappableOperand(ir.release()).release()
+            ).release()
+        ).release()
+    );
+
     os << ".intel_syntax" << std::endl;
 
     if (ir->global_defines.size()) {

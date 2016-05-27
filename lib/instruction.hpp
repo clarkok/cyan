@@ -176,8 +176,16 @@ public:
     { return left; }
 
     inline Instruction *
+    setLeft(Instruction *inst)
+    { return left = inst; }
+
+    inline Instruction *
     getRight() const
     { return right; }
+
+    inline Instruction *
+    setRight(Instruction *inst)
+    { return right = inst; }
 
     virtual bool
     isCodeGenRoot() const
@@ -213,9 +221,16 @@ public:
         getLeft()->unreference();
         getRight()->unreference();
     }
+
+    virtual void
+    replaceUsage(Instruction *original, Instruction *replace)
+    {
+        if (left == original)   { left = replace; }
+        if (right == original)  { right = replace; }
+    }
 };
 
-#define defineBinaryInstSwapable(_name)                             \
+#define defineBinaryInstSwappable(_name)                            \
     class _name : public BinaryInst                                 \
     {                                                               \
     public:                                                         \
@@ -255,15 +270,9 @@ public:
             );                                                      \
             return ret;                                             \
         }                                                           \
-        virtual void                                                \
-        replaceUsage(Instruction *original, Instruction *replace)   \
-        {                                                           \
-            if (left == original)   { left = replace; }             \
-            if (right == original)  { right = replace; }            \
-        }                                                           \
     }
 
-#define defineBinaryInstUnswapable(_name)                           \
+#define defineBinaryInstUnswappable(_name)                          \
     class _name : public BinaryInst                                 \
     {                                                               \
     public:                                                         \
@@ -297,30 +306,24 @@ public:
             );                                                      \
             return ret;                                             \
         }                                                           \
-        virtual void                                                \
-        replaceUsage(Instruction *original, Instruction *replace)   \
-        {                                                           \
-            if (left == original)   { left = replace; }             \
-            if (right == original)  { right = replace; }            \
-        }                                                           \
     }
 
-defineBinaryInstSwapable    (AddInst);
-defineBinaryInstUnswapable  (SubInst);
-defineBinaryInstSwapable    (MulInst);
-defineBinaryInstUnswapable  (DivInst);
-defineBinaryInstUnswapable  (ModInst);
+defineBinaryInstSwappable   (AddInst);
+defineBinaryInstUnswappable (SubInst);
+defineBinaryInstSwappable   (MulInst);
+defineBinaryInstUnswappable (DivInst);
+defineBinaryInstUnswappable (ModInst);
 
-defineBinaryInstUnswapable  (ShlInst);
-defineBinaryInstUnswapable  (ShrInst);
-defineBinaryInstSwapable    (OrInst);
-defineBinaryInstSwapable    (AndInst);
-defineBinaryInstSwapable    (NorInst);
-defineBinaryInstSwapable    (XorInst);
+defineBinaryInstUnswappable (ShlInst);
+defineBinaryInstUnswappable (ShrInst);
+defineBinaryInstSwappable   (OrInst);
+defineBinaryInstSwappable   (AndInst);
+defineBinaryInstSwappable   (NorInst);
+defineBinaryInstSwappable   (XorInst);
 
-defineBinaryInstSwapable    (SeqInst);
-defineBinaryInstUnswapable  (SltInst);
-defineBinaryInstUnswapable  (SleInst);
+defineBinaryInstSwappable   (SeqInst);
+defineBinaryInstUnswappable (SltInst);
+defineBinaryInstUnswappable (SleInst);
 
 #undef defineBinaryInst
 
