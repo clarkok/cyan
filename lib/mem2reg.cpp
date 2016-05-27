@@ -11,6 +11,88 @@ using namespace cyan;
 std::stringstream Mem2Reg::trash_out;
 
 void
+Mem2Reg::allocaForArgument(Function *func)
+{
+    ir->output(debug_out);
+    argument_map.clear();
+    value_map.clear();
+
+    std::list<std::unique_ptr<Instruction> > buffer;
+
+    auto entry_block = func->block_list.begin()->get();
+    for (auto &block_ptr : func->block_list) {
+        for (
+            auto inst_iter = block_ptr->inst_list.begin();
+            inst_iter != block_ptr->inst_list.end();
+        ) {
+            if ((*inst_iter)->is<ArgInst>()) {
+                auto arg_inst = (*inst_iter)->to<ArgInst>();
+                Instruction *alloc_inst = nullptr;
+                if (argument_map.find(arg_inst->getValue()) == argument_map.end()) {
+                    auto new_arg_inst = new ArgInst(
+                        arg_inst->getType()->to<PointerType>(),
+                        arg_inst->getValue(),
+                        entry_block,
+                        arg_inst->getName() + "_"
+                    );
+                    auto imm_inst = new UnsignedImmInst(
+                        ir->type_pool->getUnsignedIntegerType(CYAN_PRODUCT_BITS),
+                        1,
+                        entry_block,
+                        "_" + std::to_string(func->countLocalTemp())
+                    );
+                    alloc_inst = new AllocaInst(
+                        arg_inst->getType(),
+                        imm_inst,
+                        entry_block,
+                        "_" + arg_inst->getName()
+                    );
+                    auto load_inst = new LoadInst(
+                        arg_inst->getType()->to<PointerType>()->getBaseType(),
+                        new_arg_inst,
+                        entry_block,
+                        "_" + std::to_string(func->countLocalTemp())
+                    );
+                    auto store_inst = new StoreInst(
+                        arg_inst->getType()->to<PointerType>()->getBaseType(),
+                        alloc_inst,
+                        load_inst,
+                        entry_block,
+                        "_" + std::to_string(func->countLocalTemp())
+                    );
+                    buffer.emplace_back(new_arg_inst);
+                    buffer.emplace_back(imm_inst);
+                    buffer.emplace_back(alloc_inst);
+                    buffer.emplace_back(load_inst);
+                    buffer.emplace_back(store_inst);
+                    argument_map.emplace(arg_inst->getValue(), alloc_inst);
+                }
+                else {
+                    alloc_inst = argument_map.at(arg_inst->getValue());
+                }
+                value_map.emplace(arg_inst, alloc_inst);
+                inst_iter = block_ptr->inst_list.erase(inst_iter);
+            }
+            else {
+                inst_iter++;
+            }
+        }
+    }
+
+    for (auto &block_ptr : func->block_list) {
+        for (auto &inst_ptr : block_ptr->inst_list) {
+            inst_ptr->resolve(value_map);
+        }
+    }
+
+    if (func->block_list.size()) {
+        entry_block->inst_list.splice(entry_block->inst_list.begin(), buffer);
+    }
+
+    value_map.clear();
+}
+
+void
 Mem2Reg::scanAllAllocInst(Function *func)
 {
     alloc_insts.clear();
@@ -94,9 +176,16 @@ Mem2Reg::replaceInBasicBlock(Function *func, BasicBlock *block, Instruction *ins
             }
 
             if ((*inst_iter)->is<LoadInst>() && (*inst_iter)->to<LoadInst>()->getAddress() == inst) {
-                assert(version_map.find(block) != version_map.end());
-                assert(version_map.at(block));
-                value_map.emplace(inst_iter->get(), version_map.at(block));
+                Instruction *replacement = nullptr;
+                if (version_map.find(block) == version_map.end()) {
+                    assert(block->preceders.size());
+                    replacement = requestLatestValue(func, *block->preceders.begin(), inst);
+                }
+                else {
+                    replacement = version_map.at(block);
+                }
+                assert(replacement);
+                value_map.emplace(inst_iter->get(), replacement);
                 inst_iter = block->inst_list.erase(inst_iter);
                 continue;
             }
