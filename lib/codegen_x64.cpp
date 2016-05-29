@@ -328,6 +328,7 @@ struct And : public Instruction
 struct Call : public Instruction
 {
     std::shared_ptr<Operand> func, rax;
+    std::list<X64::Register> saved_registers;
 
     Call(std::shared_ptr<Operand> func, std::shared_ptr<Operand> rax)
         : func(func), rax(rax)
@@ -1012,10 +1013,6 @@ public:
                                 );
                             }
                             else {
-                                assert(
-                                    add_inst->getRight()->getType()->is<SignedIntegerType>() ||
-                                    add_inst->getRight()->getType()->is<UnsignedIntegerType>()
-                                );
                                 auto imm_inst = new SignedImmInst(
                                     ir->type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
                                     8,
@@ -1042,6 +1039,69 @@ public:
                         }
                     }
                     else if ((*inst_iter)->is<SubInst>()) {
+                        auto sub_inst = (*inst_iter)->to<SubInst>();
+                        if (
+                            sub_inst->getLeft()->getType()->is<PointerType>() ||
+                            sub_inst->getLeft()->getType()->is<ConceptType>() ||
+                            sub_inst->getLeft()->getType()->is<StructType>()
+                            ) {
+                            if (sub_inst->getRight()->is<SignedImmInst>()) {
+                                block_ptr->inst_list.emplace(
+                                    inst_iter,
+                                    sub_inst->setRight(
+                                        new SignedImmInst(
+                                            ir->type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                                            sub_inst->getRight()->to<SignedImmInst>()->getValue() * 8,
+                                            block_ptr.get(),
+                                            "$" + std::to_string(
+                                                sub_inst->getRight()->to<SignedImmInst>()->getValue() * 8)
+                                        )
+                                    )
+                                );
+                            }
+                            else if (sub_inst->getRight()->is<UnsignedImmInst>()) {
+                                block_ptr->inst_list.emplace(
+                                    inst_iter,
+                                    sub_inst->setRight(
+                                        new UnsignedImmInst(
+                                            ir->type_pool->getUnsignedIntegerType(CYAN_PRODUCT_BITS),
+                                            sub_inst->getRight()->to<UnsignedImmInst>()->getValue() * 8,
+                                            block_ptr.get(),
+                                            "$" + std::to_string(
+                                                sub_inst->getRight()->to<UnsignedImmInst>()->getValue() * 8)
+                                        )
+                                    )
+                                );
+                            }
+                            else {
+                                assert(
+                                    sub_inst->getRight()->getType()->is<SignedIntegerType>() ||
+                                    sub_inst->getRight()->getType()->is<UnsignedIntegerType>()
+                                );
+                                auto imm_inst = new SignedImmInst(
+                                    ir->type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                                    8,
+                                    block_ptr.get(),
+                                    "$8"
+                                );
+                                block_ptr->inst_list.emplace(
+                                    inst_iter,
+                                    imm_inst
+                                );
+                                block_ptr->inst_list.emplace(
+                                    inst_iter,
+                                    sub_inst->setRight(
+                                        new MulInst(
+                                            ir->type_pool->getSignedIntegerType(CYAN_PRODUCT_BITS),
+                                            sub_inst->getRight(),
+                                            imm_inst,
+                                            block_ptr.get(),
+                                            "_" + std::to_string(func->countLocalTemp())
+                                        )
+                                    )
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -1481,6 +1541,38 @@ CodeGenX64::allocateRegisters()
     ) {
         (*inst_iter)->registerAllocate(this);
         (*inst_iter)->resolveTooManyMemoryLocations(inst_list, inst_iter, rax);
+        if ((*inst_iter)->is<X64::CallPreserve>()) {
+#define save_register(__r)                                                                      \
+            if (available_registers.find(X64::Register::R10) == available_registers.end()) {    \
+                inst_list.emplace(                                                              \
+                    inst_iter,                                                                  \
+                    new X64::Push(                                                              \
+                        std::shared_ptr<X64::Operand>(new X64::RegisterOperand(__r))            \
+                    )                                                                           \
+                );                                                                              \
+                (*inst_iter)->to<X64::CallPreserve>()->call_inst->                              \
+                    saved_registers.emplace_front(__r);                                         \
+            }
+            for (
+                auto reg = GP_REG_START;
+                reg != GP_REG_END;
+                reg = X64::next(reg)
+            ) {
+                save_register(reg);
+            }
+#undef save_register
+        }
+        else if ((*inst_iter)->is<X64::CallRestore>()) {
+            auto call_inst = (*inst_iter)->to<X64::CallRestore>()->call_inst;
+            for (auto reg : call_inst->saved_registers) {
+                inst_list.emplace(
+                    inst_iter,
+                    new X64::Pop(
+                        std::shared_ptr<X64::Operand>(new X64::RegisterOperand(reg))
+                    )
+                );
+            }
+        }
         ++current_inst_index;
     }
 }
@@ -1595,7 +1687,11 @@ CodeGenX64::requestRegister(X64::Register reg, X64::Operand *operand)
     }
 
     assert(victim);
-    assert(victim->is<X64::ValueOperand>());
+    if (!victim->is<X64::ValueOperand>()) {
+        std::cerr << "Fixed register overlay: " <<
+            X64::to_string(victim->to<X64::RegisterOperand>()->reg) << std::endl;
+        assert(victim->is<X64::ValueOperand>());
+    }
     victim->to<X64::ValueOperand>()->actual_operand.reset(allocateAll({reg}, victim));
     current_mapped_register[reg] = operand;
 }
@@ -2239,14 +2335,17 @@ CodeGenX64::gen(CallInst *inst)
         for (auto i = inst->arguments_size() - 1; i >= 6; --i) {
             if (inst_result.find(inst->getArgumentByIndex(i)) == inst_result.end()) {
                 inst_result[inst->getArgumentByIndex(i)] = newValue();
+                inst->getArgumentByIndex(i)->codegen(this);
             }
-            block_map[inst->getOwnerBlock()]->inst_list.emplace_back(
-                new X64::Push(inst_result[inst->getArgumentByIndex(i)]));
             inst_used[inst->getArgumentByIndex(i)]++;
         }
     } while (false);
 #undef call_set_argument_register
     block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::CallPreserve(call_inst));
+    for (auto i = inst->arguments_size() - 1; i >= 6; --i) {
+        block_map[inst->getOwnerBlock()]->inst_list.emplace_back(
+            new X64::Push(inst_result[inst->getArgumentByIndex(i)]));
+    }
     block_map[inst->getOwnerBlock()]->inst_list.emplace_back(call_inst);
     block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
         inst_result.at(inst),

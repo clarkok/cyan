@@ -74,3 +74,11 @@ define_codegen_x64_test(function_call_test,
 define_codegen_x64_test(too_many_registers,
     "let a = 1 * (2 + (3 * (4 + (5 * (6 + (7 * (8 + (9 * (10 + (11 * (12 + (13 * (14 + (15 * 15))))))))))))));"
 )
+
+define_codegen_x64_test(too_many_arguments,
+    "function callee(a : i32, b : i32, c : i32, d : i32, e : i32, f : i32, g : i32, h : i32, i : i32, j : i32) {\n"
+    "}\n"
+    "function main() {\n"
+    "    callee(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);\n"
+    "}\n"
+)
