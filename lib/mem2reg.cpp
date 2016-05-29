@@ -201,7 +201,7 @@ Mem2Reg::replaceInBasicBlock(Function *func, BasicBlock *block, Instruction *ins
     }
     else {
         auto builder = PhiInst::Builder(
-            inst->getType(),
+            inst->getType()->to<PointerType>()->getBaseType(),
             block,
             inst->getName() + "." + std::to_string(func->countLocalTemp())
         );

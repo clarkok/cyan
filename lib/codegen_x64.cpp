@@ -956,6 +956,17 @@ public:
                             binary_inst->setLeft(binary_inst->getRight());
                             binary_inst->setRight(t);
                         }
+
+                        if (
+                            binary_inst->getRight()->getType()->is<ArrayType>() ||
+                            binary_inst->getRight()->getType()->is<PointerType>() ||
+                            binary_inst->getRight()->getType()->is<StructType>() ||
+                            binary_inst->getRight()->getType()->is<ConceptType>()
+                        ) {
+                            auto t = binary_inst->getLeft();
+                            binary_inst->setLeft(binary_inst->getRight());
+                            binary_inst->setRight(t);
+                        }
                     }
                 }
             }
@@ -1135,12 +1146,12 @@ std::ostream &
 CodeGenX64::generate(std::ostream &os)
 {
     ir.reset(
-        DeadCodeEliminater(
-            X64::ResolvePointerArithmetic(
-                X64::ResortSwappableOperand(ir.release()).release()
-            ).release()
+        X64::ResolvePointerArithmetic(
+            X64::ResortSwappableOperand(ir.release()).release()
         ).release()
     );
+
+    ir->output(std::cout);
 
     os << ".intel_syntax" << std::endl;
 
@@ -1237,28 +1248,28 @@ CodeGenX64::generateFunc(Function *func)
         ++block_iter
     ) {
         auto block_ptr = block_iter->get();
-#define tail_condition_jump(jump_true, jump_false)                              \
-    if (block_ptr->then_block != std::next(block_iter)->get()) {                \
-        block_map[block_ptr]->inst_list.emplace_back(new jump_true(             \
-            std::make_shared<X64::LabelOperand>(                                \
-                func->getName() + "." + block_ptr->then_block->getName()        \
-            )                                                                   \
-        ));                                                                     \
-        if (block_ptr->else_block != std::next(block_iter)->get()) {            \
-            block_map[block_ptr]->inst_list.emplace_back(new X64::Jmp(          \
-                std::make_shared<X64::LabelOperand>(                            \
-                    func->getName() + "." + block_ptr->else_block->getName()    \
-                )                                                               \
-            ));                                                                 \
-        }                                                                       \
-    }                                                                           \
-    else {                                                                      \
-        block_map[block_ptr]->inst_list.emplace_back(new jump_false(            \
-            std::make_shared<X64::LabelOperand>(                                \
-                func->getName() + "." + block_ptr->else_block->getName()        \
-            )                                                                   \
-        ));                                                                     \
-    }
+#define tail_condition_jump(jump_true, jump_false)                                  \
+        if (block_ptr->then_block != std::next(block_iter)->get()) {                \
+            block_map[block_ptr]->inst_list.emplace_back(new jump_true(             \
+                std::make_shared<X64::LabelOperand>(                                \
+                    func->getName() + "." + block_ptr->then_block->getName()        \
+                )                                                                   \
+            ));                                                                     \
+            if (block_ptr->else_block != std::next(block_iter)->get()) {            \
+                block_map[block_ptr]->inst_list.emplace_back(new X64::Jmp(          \
+                    std::make_shared<X64::LabelOperand>(                            \
+                        func->getName() + "." + block_ptr->else_block->getName()    \
+                    )                                                               \
+                ));                                                                 \
+            }                                                                       \
+        }                                                                           \
+        else {                                                                      \
+            block_map[block_ptr]->inst_list.emplace_back(new jump_false(            \
+                std::make_shared<X64::LabelOperand>(                                \
+                    func->getName() + "." + block_ptr->else_block->getName()        \
+                )                                                                   \
+            ));                                                                     \
+        }
 
         if (block_ptr->condition) {
             if (inst_result.find(block_ptr->condition) == inst_result.end()) {
@@ -1539,8 +1550,10 @@ CodeGenX64::allocateRegisters()
         inst_iter != inst_list.end();
         ++inst_iter
     ) {
-        (*inst_iter)->registerAllocate(this);
-        (*inst_iter)->resolveTooManyMemoryLocations(inst_list, inst_iter, rax);
+        /*
+            (*inst_iter)->registerAllocate(this);
+            (*inst_iter)->resolveTooManyMemoryLocations(inst_list, inst_iter, rax);
+         */
         if ((*inst_iter)->is<X64::CallPreserve>()) {
 #define save_register(__r)                                                                      \
             if (available_registers.find(X64::Register::R10) == available_registers.end()) {    \
@@ -1703,15 +1716,15 @@ CodeGenX64::registerAllocate(X64::Label *)
 void
 CodeGenX64::registerAllocate(X64::Add *inst)
 {
-    allocateFor(inst->dst.get());
     allocateFor(inst->src.get());
+    allocateFor(inst->dst.get());
 }
 
 void
 CodeGenX64::registerAllocate(X64::And *inst)
 {
-    allocateFor(inst->dst.get());
     allocateFor(inst->src.get());
+    allocateFor(inst->dst.get());
 }
 
 void
@@ -1744,8 +1757,8 @@ CodeGenX64::registerAllocate(X64::Imod *)
 void
 CodeGenX64::registerAllocate(X64::Imul *inst)
 {
-    allocateFor(inst->dst.get());
     allocateFor(inst->src.get());
+    allocateFor(inst->dst.get());
 }
 
 void
@@ -1779,8 +1792,8 @@ CodeGenX64::registerAllocate(X64::Jle *)
 void
 CodeGenX64::registerAllocate(X64::LeaOffset *inst)
 {
-    allocateFor(inst->dst.get());
     allocateFor(inst->base.get());
+    allocateFor(inst->dst.get());
 }
 
 void
@@ -1790,8 +1803,8 @@ CodeGenX64::registerAllocate(X64::LeaGlobal *inst)
 void
 CodeGenX64::registerAllocate(X64::Mov *inst)
 {
-    allocateFor(inst->dst.get());
     allocateFor(inst->src.get());
+    allocateFor(inst->dst.get());
 }
 
 void
@@ -1805,8 +1818,8 @@ CodeGenX64::registerAllocate(X64::Not *inst)
 void
 CodeGenX64::registerAllocate(X64::Or *inst)
 {
-    allocateFor(inst->dst.get());
     allocateFor(inst->src.get());
+    allocateFor(inst->dst.get());
 }
 
 void
@@ -1824,15 +1837,15 @@ CodeGenX64::registerAllocate(X64::Ret *)
 void
 CodeGenX64::registerAllocate(X64::Sal *inst)
 {
-    allocateFor(inst->dst.get());
     allocateFor(inst->src.get());
+    allocateFor(inst->dst.get());
 }
 
 void
 CodeGenX64::registerAllocate(X64::Sar *inst)
 {
-    allocateFor(inst->dst.get());
     allocateFor(inst->src.get());
+    allocateFor(inst->dst.get());
 }
 
 void
@@ -1850,22 +1863,22 @@ CodeGenX64::registerAllocate(X64::SetLe *inst)
 void
 CodeGenX64::registerAllocate(X64::Shr *inst)
 {
-    allocateFor(inst->dst.get());
     allocateFor(inst->src.get());
+    allocateFor(inst->dst.get());
 }
 
 void
 CodeGenX64::registerAllocate(X64::Sub *inst)
 {
-    allocateFor(inst->dst.get());
     allocateFor(inst->src.get());
+    allocateFor(inst->dst.get());
 }
 
 void
 CodeGenX64::registerAllocate(X64::Xor *inst)
 {
-    allocateFor(inst->dst.get());
     allocateFor(inst->src.get());
+    allocateFor(inst->dst.get());
 }
 
 int
@@ -2297,6 +2310,15 @@ CodeGenX64::gen(CallInst *inst)
                 std::shared_ptr<X64::Operand>(new X64::RegisterOperand(__r)),           \
                 inst_result.at(inst->getArgumentByIndex(__i))                           \
             ));                                                                         \
+            inst_used[inst->getArgumentByIndex(__i)]++;                                 \
+        }                                                                               \
+        else if (inst->getArgumentByIndex(__i)->getReferencedCount() != 1) {            \
+            inst_result.emplace(inst->getArgumentByIndex(__i), newValue());             \
+            block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(      \
+                std::shared_ptr<X64::Operand>(new X64::RegisterOperand(__r)),           \
+                inst_result.at(inst->getArgumentByIndex(__i))                           \
+            ));                                                                         \
+            inst->getArgumentByIndex(__i)->codegen(this);                               \
             inst_used[inst->getArgumentByIndex(__i)]++;                                 \
         }                                                                               \
         else {                                                                          \
