@@ -214,7 +214,7 @@ ConceptType::to_string() const
 
 size_t
 StructType::size() const
-{ return members.size() * (CYAN_PRODUCT_BITS / 8); }
+{ return (members.size() + concepts.size()) * (CYAN_PRODUCT_BITS / 8); }
 
 std::string
 StructType::to_string() const
