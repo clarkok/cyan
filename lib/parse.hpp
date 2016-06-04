@@ -89,7 +89,7 @@ public:
     struct ParseExpectErrorException : ParseErrorException
     {
         ParseExpectErrorException(Location location, std::string expected, std::string actual)
-            : ParseErrorException(location, "Expected " + expected + ", but met " + actual)
+            : ParseErrorException(location, "Expected " + expected + ", but met '" + actual + "'")
         { }
     };
 

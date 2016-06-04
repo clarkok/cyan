@@ -38,7 +38,6 @@ function deletePerson(target : Person) {
 }
 
 function main() {
-    let name = new i8[10];
-    let student = newStudent(name, 1, 2);
+    let student = newStudent("test", 1, 2);
     student.Person.getName();
 }

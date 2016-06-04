@@ -24,13 +24,12 @@ Parser::_next()
         return (peaking_token = T_EOF);
     }
 
-    while (!_endOfInput() && isspace(_current())) {
-        _forward();
-    }
-
-    token_start = current;
-
     while (!_endOfInput()) {
+        while (!_endOfInput() && isspace(_current())) {
+            _forward();
+        }
+        token_start = current;
+
         if (isalpha(_current()) || _current() == '_') {
             return _parseId();
         }
@@ -244,7 +243,7 @@ Parser::_parse()
             if (_peak() != T_ID) {
                 throw ParseErrorException(
                     location,
-                    "Only concept / define / let / struct allowed to appear here"
+                    "`" + _tokenLiteral() + "` cannot appera here"
                 );
             }
 
@@ -252,7 +251,7 @@ Parser::_parse()
             if (!symbol || symbol->klass != Symbol::K_RESERVED) {
                 throw ParseErrorException(
                     location,
-                    "Only concept / define / let / struct allowed to appear here"
+                    "`" + _tokenLiteral() + "` cannot appera here"
                 );
             }
 
@@ -274,7 +273,7 @@ Parser::_parse()
             else {
                 throw ParseErrorException(
                     location,
-                    "Only concept / function / let / struct / impl allowed to appear here"
+                    "`" + _tokenLiteral() + "` cannot appera here"
                 );
             }
         }
@@ -377,10 +376,11 @@ Parser::checkFunctionDefined(std::string name, FunctionType *type)
     auto symbol = symbol_table->lookup(name);
     if (!symbol) { return nullptr; }
     if (
+        symbol->klass == Symbol::K_GLOBAL ||
         symbol->klass == Symbol::K_PRIMITIVE ||
         symbol->klass == Symbol::K_CONCEPT ||
         symbol->klass == Symbol::K_STRUCT
-        ) {
+    ) {
         throw ParseRedefinedErrorException(location, name, symbol->location);
     }
     else if (

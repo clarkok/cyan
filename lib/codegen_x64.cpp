@@ -961,7 +961,8 @@ public:
                             binary_inst->getRight()->getType()->is<ArrayType>() ||
                             binary_inst->getRight()->getType()->is<PointerType>() ||
                             binary_inst->getRight()->getType()->is<StructType>() ||
-                            binary_inst->getRight()->getType()->is<ConceptType>()
+                            binary_inst->getRight()->getType()->is<ConceptType>() ||
+                            binary_inst->getRight()->getType()->is<FunctionType>()
                         ) {
                             auto t = binary_inst->getLeft();
                             binary_inst->setLeft(binary_inst->getRight());
@@ -993,7 +994,8 @@ public:
                         if (
                             add_inst->getLeft()->getType()->is<PointerType>() ||
                             add_inst->getLeft()->getType()->is<ConceptType>() ||
-                            add_inst->getLeft()->getType()->is<StructType>()
+                            add_inst->getLeft()->getType()->is<StructType>() ||
+                            add_inst->getLeft()->getType()->is<VTableType>()
                         ) {
                             if (add_inst->getRight()->is<SignedImmInst>()) {
                                 block_ptr->inst_list.emplace(
@@ -1054,8 +1056,9 @@ public:
                         if (
                             sub_inst->getLeft()->getType()->is<PointerType>() ||
                             sub_inst->getLeft()->getType()->is<ConceptType>() ||
-                            sub_inst->getLeft()->getType()->is<StructType>()
-                            ) {
+                            sub_inst->getLeft()->getType()->is<StructType>() ||
+                            sub_inst->getLeft()->getType()->is<VTableType>()
+                        ) {
                             if (sub_inst->getRight()->is<SignedImmInst>()) {
                                 block_ptr->inst_list.emplace(
                                     inst_iter,
@@ -1151,7 +1154,7 @@ CodeGenX64::generate(std::ostream &os)
         ).release()
     );
 
-    ir->output(std::cout);
+    // ir->output(std::cout);
 
     os << ".intel_syntax" << std::endl;
 
@@ -1166,8 +1169,8 @@ CodeGenX64::generate(std::ostream &os)
     if (ir->string_pool.size()) {
         os << "\n.section .rodata" << std::endl;
         for (auto &string_pair : ir->string_pool) {
-            os << "\t" << string_pair.first << ":\tstring " <<
-            X64::escape_string(string_pair.second) << std::endl;
+            os << "\t" << string_pair.second << ":\t.asciz " <<
+            X64::escape_string(string_pair.first) << std::endl;
         }
     }
 
@@ -1550,10 +1553,8 @@ CodeGenX64::allocateRegisters()
         inst_iter != inst_list.end();
         ++inst_iter
     ) {
-        /*
-            (*inst_iter)->registerAllocate(this);
-            (*inst_iter)->resolveTooManyMemoryLocations(inst_list, inst_iter, rax);
-         */
+        (*inst_iter)->registerAllocate(this);
+        (*inst_iter)->resolveTooManyMemoryLocations(inst_list, inst_iter, rax);
         if ((*inst_iter)->is<X64::CallPreserve>()) {
 #define save_register(__r)                                                                      \
             if (available_registers.find(X64::Register::R10) == available_registers.end()) {    \
@@ -2050,7 +2051,7 @@ void
 CodeGenX64::gen(GlobalInst *inst)
 {
     assert(inst_result.find(inst) != inst_result.end());
-    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::LeaGlobal(
         inst_result.at(inst),
         std::shared_ptr<X64::Operand>(new X64::GlobalMemoryOperand(inst->getValue()))
     ));
@@ -2314,11 +2315,11 @@ CodeGenX64::gen(CallInst *inst)
         }                                                                               \
         else if (inst->getArgumentByIndex(__i)->getReferencedCount() != 1) {            \
             inst_result.emplace(inst->getArgumentByIndex(__i), newValue());             \
+            inst->getArgumentByIndex(__i)->codegen(this);                               \
             block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(      \
                 std::shared_ptr<X64::Operand>(new X64::RegisterOperand(__r)),           \
                 inst_result.at(inst->getArgumentByIndex(__i))                           \
             ));                                                                         \
-            inst->getArgumentByIndex(__i)->codegen(this);                               \
             inst_used[inst->getArgumentByIndex(__i)]++;                                 \
         }                                                                               \
         else {                                                                          \
@@ -2447,9 +2448,9 @@ CodeGenX64::gen(NewInst *inst)
                 rax,
                 inst_result.at(inst)
             ));
-            block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(
+            block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::LeaGlobal(
                 rdx,
-                std::shared_ptr<X64::Operand>(new X64::LabelOperand(
+                std::shared_ptr<X64::Operand>(new X64::GlobalMemoryOperand(
                     escapeAsmName(
                         ir->type_pool->getCastedStructType(
                             struct_type,
