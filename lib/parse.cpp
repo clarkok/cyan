@@ -609,7 +609,7 @@ Parser::parseFunctionDefine()
         symbol_table->popScope();
         throw e;
     }
-    auto forward_symbol = checkFunctionDefined(function_name, dynamic_cast<FunctionType*>(last_type));
+    auto forward_symbol = checkFunctionDefined(function_name, last_type->to<FunctionType>());
 
     if (!forward_symbol) {
         forward_symbol = symbol_table->defineSymbolInRoot(

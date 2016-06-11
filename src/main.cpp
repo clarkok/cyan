@@ -1,8 +1,11 @@
 #include <iostream>
+#include <cstdlib>
 
 #include "rlutil/rlutil.h"
 #include "libcyan.hpp"
 #include "codegen_x64.hpp"
+#include "vm.hpp"
+#include "lib_functions.hpp"
 
 using namespace cyan;
 
@@ -24,14 +27,16 @@ print_help()
 {
     static const int OPTIONS_COLUMN_SIZE = 16;
     static const char *OPTIONS_PAIR[][2] = {
-        {"-e <IR|X64>", "emit IR code or assembly"},
-        {"-h",          "print this help"},
-        {"-o <file>",   "define output file"},
-        {"-O0",         "no optimization"},
-        {"-O1",         "basic optimization"},
-        {"-O2",         "normal optimization"},
-        {"-O3",         "full optimization"},
-        {"-v",          "show version"},
+        {"-d",                  "output debug info to stderr"},
+        {"-e <GCC|IR|X64>",     "pass to GCC or emitting IR code or assembly"},
+        {"-h",                  "print this help"},
+        {"-o <file>",           "define output file"},
+        {"-O0",                 "no optimization"},
+        {"-O1",                 "basic optimization"},
+        {"-O2",                 "normal optimization"},
+        {"-O3",                 "full optimization"},
+        {"-r",                  "run the code"},
+        {"-v",                  "show version"},
     };
 
     rlutil::saveDefaultColor();
@@ -62,6 +67,8 @@ struct Config
     std::string emit_code;
     std::vector<std::string> input_files;
     std::unique_ptr<Parser> parser;
+    bool run;
+    bool debug_out;
 
 private:
     Config()
@@ -71,10 +78,12 @@ private:
                                   .addCollector(new ScreenOutputErrorCollector())
                                   .release()
                           )),
-          output_file("a.out"),
+          output_file(),
           optimize_level(2),
-          emit_code("X64"),
-          parser(new Parser(error_collector))
+          emit_code("GCC"),
+          parser(new Parser(error_collector)),
+          run(false),
+          debug_out(false)
     { }
 
 public:
@@ -94,6 +103,9 @@ public:
                     case 'e':
                         --argc; ++argv;
                         ret->emit_code = *argv;
+                        for (auto &ch : ret->emit_code) {
+                            ch = std::toupper(ch);
+                        }
                         break;
                     case 'O':
                     {
@@ -125,6 +137,12 @@ public:
                     case 'v':
                         std::cout << CYAN_VERSION << std::endl;
                         exit(0);
+                    case 'r':
+                        ret->run = true;
+                        break;
+                    case 'd':
+                        ret->debug_out = true;
+                        break;
                     default:
                         ret->error_collector->error(
                             Exception(std::string("unknown option: ") + *argv)
@@ -147,9 +165,31 @@ public:
             exit(-1);
         }
 
+        if (ret->output_file.length() == 0) {
+            if (ret->emit_code == "X64") {
+                ret->output_file = "a.s";
+            }
+            else if (ret->emit_code == "IR") {
+                ret->output_file = "a.ir";
+            }
+            else if (ret->emit_code == "GCC") {
+                ret->output_file = "a.out";
+            }
+            else {
+                assert(false);
+            }
+        }
+
         return ret;
     }
 };
+
+std::string
+get_env(std::string name)
+{
+    auto var = std::getenv(name.c_str());
+    return var ? var : "";
+}
 
 int
 main(int argc, const char **argv)
@@ -163,22 +203,61 @@ main(int argc, const char **argv)
     }
 
     auto ir = config->parser->release();
-    switch (config->optimize_level) {
-        case 0: ir.reset(OptimizerLevel0(ir.release()).release()); break;
-        case 1: ir.reset(OptimizerLevel1(ir.release()).release()); break;
-        case 2: ir.reset(OptimizerLevel2(ir.release()).release()); break;
-        case 3: ir.reset(OptimizerLevel3(ir.release()).release()); break;
-        default:
-            assert(false);
+    if (config->debug_out) {
+        switch (config->optimize_level) {
+            case 0: ir.reset(DebugOptimizerLevel0(ir.release()).release()); break;
+            case 1: ir.reset(DebugOptimizerLevel1(ir.release()).release()); break;
+            case 2: ir.reset(DebugOptimizerLevel2(ir.release()).release()); break;
+            case 3: ir.reset(DebugOptimizerLevel3(ir.release()).release()); break;
+            default:
+                assert(false);
+        }
+    }
+    else {
+        switch (config->optimize_level) {
+            case 0: ir.reset(OptimizerLevel0(ir.release()).release()); break;
+            case 1: ir.reset(OptimizerLevel1(ir.release()).release()); break;
+            case 2: ir.reset(OptimizerLevel2(ir.release()).release()); break;
+            case 3: ir.reset(OptimizerLevel3(ir.release()).release()); break;
+            default:
+                assert(false);
+        }
     }
 
-    std::ofstream output(config->output_file);
+    if (config->run) {
+        auto gen = vm::VirtualMachine::GenerateFactory(ir.release());
+        registerLibFunctions(gen.get());
+        gen->generate();
+        auto vm = gen->release();
+        auto ret_val = vm->start();
+
+        std::cout << "exit with code " << ret_val << std::endl;
+        return ret_val;
+    }
+
     if (config->emit_code == "IR") {
+        std::ofstream output(config->output_file);
         ir->output(output);
     }
     else if (config->emit_code == "X64") {
+        std::ofstream output(config->output_file);
         CodeGenX64 codegen(ir.release());
         codegen.generate(output);
+    }
+    else if (config->emit_code == "GCC") {
+        auto temp_name = ".__temp_asm__" + config->output_file + ".s";
+        auto runtime_path = get_env("CYAN_RUNTIME_DIR");
+        if (!runtime_path.length()) {
+            config->error_collector->error(Exception("Cannot find runtime lib in $CYAN_RUNTIME_DIR"));
+            exit(-1);
+        }
+
+        std::ofstream output(temp_name);
+        CodeGenX64 codegen(ir.release());
+        codegen.generate(output);
+
+        std::system(("gcc -m64 -o " + config->output_file + " " + temp_name + " " + runtime_path).c_str());
+        std::system(("rm " + temp_name).c_str());
     }
     else {
         config->error_collector->error(Exception("unknown emitting: " + config->emit_code));

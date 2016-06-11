@@ -83,6 +83,11 @@ Mem2Reg::allocaForArgument(Function *func)
         for (auto &inst_ptr : block_ptr->inst_list) {
             inst_ptr->resolve(value_map);
         }
+        if (block_ptr->condition) {
+            if (value_map.find(block_ptr->condition) != value_map.end()) {
+                block_ptr->condition = value_map.at(block_ptr->condition);
+            }
+        }
     }
 
     if (func->block_list.size()) {
@@ -140,7 +145,7 @@ Mem2Reg::performReplace(Function *func)
     for (auto alloc_inst : alloc_insts) {
         ir->output(debug_out);
         debug_out << "========================================" << std::endl;
-        debug_out << alloc_inst->getName() << std::endl;
+        debug_out << func->getName() << " " << alloc_inst->getName() << std::endl;
         debug_out << "========================================" << std::endl;
 
         version_map.clear();
@@ -235,9 +240,8 @@ Mem2Reg::replaceInBasicBlock(Function *func, BasicBlock *block, Instruction *ins
 
         std::set<Instruction *> prev_values;
         for (auto &preceder : block->preceders) {
-            replaceInBasicBlock(func, preceder, inst);
-
-            auto value = version_map.at(preceder);
+            auto value = requestLatestValue(func, preceder, inst);
+            assert(value);
             while (value_map.find(value) != value_map.end()) {
                 assert(value);
                 value = value_map.at(value);

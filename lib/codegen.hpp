@@ -37,7 +37,7 @@ public:
 
     virtual std::ostream &generate(std::ostream &os);
 
-inst_foreach(define_gen)
+    inst_foreach(define_gen)
 };
 
 }

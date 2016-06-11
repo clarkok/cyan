@@ -60,6 +60,8 @@ class InstRewriter : public Optimizer
     Instruction *findSltResult(BasicBlock *block, Instruction *left, Instruction *right) const;
     Instruction *findSleResult(BasicBlock *block, Instruction *left, Instruction *right) const;
 
+    std::list<std::unique_ptr<Instruction> > removed;
+
 public:
     InstRewriter(IR *ir)
         : Optimizer(ir)

@@ -6,6 +6,7 @@
 #define CYAN_OPTIMIZER_HPP
 
 #include <memory>
+#include <iostream>
 
 #include "ir.hpp"
 
@@ -28,6 +29,17 @@ public:
     inline IR *
     get() const
     { return ir.get(); }
+};
+
+class OutputOptimizer : public Optimizer
+{
+public:
+    OutputOptimizer(IR *ir)
+        : Optimizer(ir)
+    {
+        ir->output(std::cerr);
+        std::cerr << "================" << std::endl;
+    }
 };
 
 }

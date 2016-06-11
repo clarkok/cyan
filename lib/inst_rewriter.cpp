@@ -48,6 +48,7 @@ InstRewriter::rewriteBlock(Function *func, BasicBlock *block)
                 if (block != func->block_list.front().get()) {
                     (*inst_iter)->setOwnerBlock(func->block_list.front().get());
                     func->block_list.front()->inst_list.emplace_front(inst_iter->release());
+                    removed.push_back(std::move(*inst_iter));
                     inst_iter = block->inst_list.erase(inst_iter);
                 }
                 else {
@@ -56,6 +57,7 @@ InstRewriter::rewriteBlock(Function *func, BasicBlock *block)
             }
             else {
                 value_map.emplace(inst_iter->get(), imm_map.at(value));
+                removed.push_back(std::move(*inst_iter));
                 inst_iter = block->inst_list.erase(inst_iter);
             }
             continue;
@@ -69,6 +71,7 @@ InstRewriter::rewriteBlock(Function *func, BasicBlock *block)
                 if (block != func->block_list.front().get()) {
                     (*inst_iter)->setOwnerBlock(func->block_list.front().get());
                     func->block_list.front()->inst_list.emplace_front(inst_iter->release());
+                    removed.push_back(std::move(*inst_iter));
                     inst_iter = block->inst_list.erase(inst_iter);
                 }
                 else {
@@ -77,6 +80,7 @@ InstRewriter::rewriteBlock(Function *func, BasicBlock *block)
             }
             else {
                 value_map.emplace(inst_iter->get(), imm_map.at(value));
+                removed.push_back(std::move(*inst_iter));
                 inst_iter = block->inst_list.erase(inst_iter);
             }
             continue;
@@ -92,6 +96,7 @@ InstRewriter::rewriteBlock(Function *func, BasicBlock *block)
             ) {
                 Instruction *result_inst = calculateConstant(func, binary_inst);
                 value_map.emplace(binary_inst, result_inst);
+                removed.push_back(std::move(*inst_iter));
                 inst_iter = block->inst_list.erase(inst_iter);
                 continue;
             }
@@ -99,6 +104,7 @@ InstRewriter::rewriteBlock(Function *func, BasicBlock *block)
             auto calculated = findCalculated(block, binary_inst);
             if (calculated) {
                 value_map.emplace(binary_inst, calculated);
+                removed.push_back(std::move(*inst_iter));
                 inst_iter = block->inst_list.erase(inst_iter);
                 continue;
             }
@@ -123,6 +129,7 @@ InstRewriter::rewriteBlock(Function *func, BasicBlock *block)
                 auto dst = loop_header->dominator;
                 (*inst_iter)->setOwnerBlock(dst);
                 dst->inst_list.emplace_back(inst_iter->release());
+                removed.push_back(std::move(*inst_iter));
                 inst_iter = block->inst_list.erase(inst_iter);
                 registerResult(dst, binary_inst);
                 continue;

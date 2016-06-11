@@ -195,12 +195,12 @@ public:
     resolve(const std::map<Instruction *, Instruction *> &value_map)
     {
         if (value_map.find(left) != value_map.end()) {
+            assert(value_map.at(left));
             left = value_map.at(left);
-            assert(left);
         }
         if (value_map.find(right) != value_map.end()) {
+            assert(value_map.at(right));
             right = value_map.at(right);
-            assert(right);
         }
     }
 
@@ -385,8 +385,8 @@ public:
     resolve(const std::map<Instruction *, Instruction *> &value_map)
     {
         if (value_map.find(address) != value_map.end()) {
+            assert(value_map.at(address));
             address = value_map.at(address);
-            assert(address);
         }
     }
 
@@ -462,12 +462,12 @@ public:
     resolve(const std::map<Instruction *, Instruction *> &value_map)
     {
         if (value_map.find(address) != value_map.end()) {
+            assert(value_map.at(address));
             address = value_map.at(address);
-            assert(address);
         }
         if (value_map.find(value) != value_map.end()) {
+            assert(value_map.at(value));
             value = value_map.at(value);
-            assert(value);
         }
     }
 
@@ -533,8 +533,8 @@ public:
     resolve(const std::map<Instruction *, Instruction *> &value_map)
     {
         if (value_map.find(space) != value_map.end()) {
+            assert(value_map.at(space));
             space = value_map.at(space);
-            assert(space);
         }
     }
 
@@ -669,14 +669,14 @@ public:
     resolve(const std::map<Instruction *, Instruction *> &value_map)
     {
         if (value_map.find(function) != value_map.end()) {
+            assert(value_map.at(function));
             function = value_map.at(function);
-            assert(function);
         }
 
         for (auto &arg : *this) {
             if (value_map.find(arg) != value_map.end()) {
+                assert(value_map.at(arg));
                 arg = value_map.at(arg);
-                assert(arg);
             }
         }
     }
@@ -763,8 +763,8 @@ public:
     resolve(const std::map<Instruction *, Instruction *> &value_map)
     {
         if (value_map.find(return_value) != value_map.end()) {
+            assert(value_map.at(return_value));
             return_value = value_map.at(return_value);
-            assert(return_value);
         }
     }
 
@@ -826,8 +826,8 @@ public:
     resolve(const std::map<Instruction *, Instruction *> &value_map)
     {
         if (value_map.find(space) != value_map.end()) {
+            assert(value_map.at(space));
             space = value_map.at(space);
-            assert(space);
         }
     }
 
@@ -889,8 +889,8 @@ public:
     resolve(const std::map<Instruction *, Instruction *> &value_map)
     {
         if (value_map.find(target) != value_map.end()) {
+            assert(value_map.at(target));
             target = value_map.at(target);
-            assert(target);
         }
     }
 
@@ -1046,8 +1046,8 @@ public:
     {
         for (auto &branch : branches) {
             if (value_map.find(branch.value) != value_map.end()) {
+                assert(value_map.at(branch.value));
                 branch.value = value_map.at(branch.value);
-                assert(branch.value);
             }
         }
     }
@@ -1077,34 +1077,34 @@ public:
     }
 };
 
-#define inst_foreach(macro) \
-    macro(Instruction)      \
-    macro(SignedImmInst)    \
-    macro(UnsignedImmInst)  \
-    macro(GlobalInst)       \
-    macro(ArgInst)          \
-    macro(AddInst)          \
-    macro(SubInst)          \
-    macro(MulInst)          \
-    macro(DivInst)          \
-    macro(ModInst)          \
-    macro(ShlInst)          \
-    macro(ShrInst)          \
-    macro(OrInst)           \
-    macro(AndInst)          \
-    macro(NorInst)          \
-    macro(XorInst)          \
-    macro(SeqInst)          \
-    macro(SltInst)          \
-    macro(SleInst)          \
-    macro(LoadInst)         \
-    macro(StoreInst)        \
-    macro(AllocaInst)       \
-    macro(CallInst)         \
-    macro(RetInst)          \
-    macro(NewInst)          \
-    macro(DeleteInst)       \
-    macro(PhiInst)
+#define inst_foreach(macro)         \
+    macro(::cyan::Instruction)      \
+    macro(::cyan::SignedImmInst)    \
+    macro(::cyan::UnsignedImmInst)  \
+    macro(::cyan::GlobalInst)       \
+    macro(::cyan::ArgInst)          \
+    macro(::cyan::AddInst)          \
+    macro(::cyan::SubInst)          \
+    macro(::cyan::MulInst)          \
+    macro(::cyan::DivInst)          \
+    macro(::cyan::ModInst)          \
+    macro(::cyan::ShlInst)          \
+    macro(::cyan::ShrInst)          \
+    macro(::cyan::OrInst)           \
+    macro(::cyan::AndInst)          \
+    macro(::cyan::NorInst)          \
+    macro(::cyan::XorInst)          \
+    macro(::cyan::SeqInst)          \
+    macro(::cyan::SltInst)          \
+    macro(::cyan::SleInst)          \
+    macro(::cyan::LoadInst)         \
+    macro(::cyan::StoreInst)        \
+    macro(::cyan::AllocaInst)       \
+    macro(::cyan::CallInst)         \
+    macro(::cyan::RetInst)          \
+    macro(::cyan::NewInst)          \
+    macro(::cyan::DeleteInst)       \
+    macro(::cyan::PhiInst)
 
 }
 

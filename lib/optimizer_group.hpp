@@ -7,6 +7,7 @@
 
 #include <functional>
 #include <type_traits>
+#include <iostream>
 
 #include "optimizer.hpp"
 #include "dep_analyzer.hpp"
@@ -86,6 +87,71 @@ typedef OptimizerGroup<
     PhiEliminator,
     DeadCodeEliminater
     > OptimizerLevel3;
+
+typedef OptimizerGroup<
+    DeadCodeEliminater,
+    OutputOptimizer
+    > DebugOptimizerLevel0;
+
+typedef OptimizerGroup<
+    DepAnalyzer,
+    LoopMarker,
+    OutputOptimizer,
+    Mem2Reg,
+    OutputOptimizer,
+    PhiEliminator,
+    OutputOptimizer,
+    UnreachableCodeEliminater,
+    DepAnalyzer,
+    LoopMarker,
+    OutputOptimizer,
+    PhiEliminator,
+    OutputOptimizer,
+    DeadCodeEliminater,
+    OutputOptimizer
+    > DebugOptimizerLevel1;
+
+typedef OptimizerGroup<
+    DepAnalyzer,
+    LoopMarker,
+    OutputOptimizer,
+    Mem2Reg,
+    OutputOptimizer,
+    PhiEliminator,
+    OutputOptimizer,
+    InstRewriter,
+    OutputOptimizer,
+    UnreachableCodeEliminater,
+    DepAnalyzer,
+    LoopMarker,
+    OutputOptimizer,
+    PhiEliminator,
+    OutputOptimizer,
+    DeadCodeEliminater,
+    OutputOptimizer
+    > DebugOptimizerLevel2;
+
+typedef OptimizerGroup<
+    Inliner,
+    OutputOptimizer,
+    DepAnalyzer,
+    LoopMarker,
+    OutputOptimizer,
+    Mem2Reg,
+    OutputOptimizer,
+    PhiEliminator,
+    OutputOptimizer,
+    InstRewriter,
+    OutputOptimizer,
+    UnreachableCodeEliminater,
+    DepAnalyzer,
+    LoopMarker,
+    OutputOptimizer,
+    PhiEliminator,
+    OutputOptimizer,
+    DeadCodeEliminater,
+    OutputOptimizer
+    > DebugOptimizerLevel3;
 }
 
 #endif //CYAN_OPTIMIZERGROUP_HPP

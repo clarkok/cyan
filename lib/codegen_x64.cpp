@@ -1553,19 +1553,23 @@ CodeGenX64::allocateRegisters()
         inst_iter != inst_list.end();
         ++inst_iter
     ) {
+        if ((*inst_iter)->is<X64::Label>()) {
+            std::cout << (*inst_iter)->to<X64::Label>()->name << std::endl;
+        }
+
         (*inst_iter)->registerAllocate(this);
         (*inst_iter)->resolveTooManyMemoryLocations(inst_list, inst_iter, rax);
         if ((*inst_iter)->is<X64::CallPreserve>()) {
-#define save_register(__r)                                                                      \
-            if (available_registers.find(X64::Register::R10) == available_registers.end()) {    \
-                inst_list.emplace(                                                              \
-                    inst_iter,                                                                  \
-                    new X64::Push(                                                              \
-                        std::shared_ptr<X64::Operand>(new X64::RegisterOperand(__r))            \
-                    )                                                                           \
-                );                                                                              \
-                (*inst_iter)->to<X64::CallPreserve>()->call_inst->                              \
-                    saved_registers.emplace_front(__r);                                         \
+#define save_register(__r)                                                              \
+            if (available_registers.find(__r) == available_registers.end()) {           \
+                inst_list.emplace(                                                      \
+                    inst_iter,                                                          \
+                    new X64::Push(                                                      \
+                        std::shared_ptr<X64::Operand>(new X64::RegisterOperand(__r))    \
+                    )                                                                   \
+                );                                                                      \
+                (*inst_iter)->to<X64::CallPreserve>()->call_inst->                      \
+                    saved_registers.emplace_front(__r);                                 \
             }
             for (
                 auto reg = GP_REG_START;
@@ -1660,6 +1664,11 @@ CodeGenX64::allocateAll(const std::set<X64::Register> &skip_list, X64::Operand *
         return allocated_operand;
     }
     else {
+        if (victim->to<X64::ValueOperand>()->actual_operand->is<X64::RegisterOperand>()) {
+            auto reg = victim->to<X64::ValueOperand>()->actual_operand->to<X64::RegisterOperand>()->reg;
+            current_mapped_register[reg] = operand;
+        }
+
         auto ret = victim->to<X64::ValueOperand>()->actual_operand.release();
         victim->to<X64::ValueOperand>()->actual_operand.reset(allocated_operand);
         return ret;
@@ -1691,14 +1700,15 @@ CodeGenX64::requestRegister(X64::Register reg, X64::Operand *operand)
 
     used_registers.emplace(reg);
 
-    auto victim = current_mapped_register[reg];
-    if (victim == operand) { return; }
-
     if (available_registers.find(reg) != available_registers.end()) {
         available_registers.erase(reg);
-        current_mapped_register.emplace(reg, operand);
+        current_mapped_register[reg] = operand;
         return;
     }
+    assert(current_mapped_register.find(reg) != current_mapped_register.end());
+
+    auto victim = current_mapped_register[reg];
+    if (victim == operand) { return; }
 
     assert(victim);
     if (!victim->is<X64::ValueOperand>()) {
@@ -2304,41 +2314,18 @@ CodeGenX64::gen(CallInst *inst)
         std::shared_ptr<X64::Operand>(new X64::RegisterOperand(X64::Register::RAX))
     );
 
+    std::vector<std::shared_ptr<X64::Operand> > argument_operands;
+    for (size_t i = 0; i < inst->arguments_size(); ++i) {
+        argument_operands.push_back(resolveOperand(inst->getArgumentByIndex(i)));
+    }
+
+    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::CallPreserve(call_inst));
 #define call_set_argument_register(__i, __r)                                            \
     do {                                                                                \
-        if (inst_result.find(inst->getArgumentByIndex(__i)) != inst_result.end()) {     \
-            block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(      \
-                std::shared_ptr<X64::Operand>(new X64::RegisterOperand(__r)),           \
-                inst_result.at(inst->getArgumentByIndex(__i))                           \
-            ));                                                                         \
-            inst_used[inst->getArgumentByIndex(__i)]++;                                 \
-        }                                                                               \
-        else if (inst->getArgumentByIndex(__i)->getReferencedCount() != 1) {            \
-            inst_result.emplace(inst->getArgumentByIndex(__i), newValue());             \
-            inst->getArgumentByIndex(__i)->codegen(this);                               \
-            block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(      \
-                std::shared_ptr<X64::Operand>(new X64::RegisterOperand(__r)),           \
-                inst_result.at(inst->getArgumentByIndex(__i))                           \
-            ));                                                                         \
-            inst_used[inst->getArgumentByIndex(__i)]++;                                 \
-        }                                                                               \
-        else {                                                                          \
-            if (inst->getArgumentByIndex(__i)->is<SignedImmInst>()) {                   \
-                block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(  \
-                    std::shared_ptr<X64::Operand>(new X64::RegisterOperand(__r)),       \
-                    resolveOperand(inst->getArgumentByIndex(__i))                       \
-                ));                                                                     \
-                inst->getArgumentByIndex(__i)->unreference();                           \
-            }                                                                           \
-            else {                                                                      \
-                inst_result.emplace(                                                    \
-                    inst->getArgumentByIndex(__i),                                      \
-                    std::shared_ptr<X64::Operand>(new X64::RegisterOperand(__r))        \
-                );                                                                      \
-                inst->getArgumentByIndex(__i)->codegen(this);                           \
-                inst_used[inst->getArgumentByIndex(__i)]++;                             \
-            }                                                                           \
-        }                                                                               \
+        block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(          \
+            std::shared_ptr<X64::Operand>(new X64::RegisterOperand(__r)),               \
+            argument_operands[__i]                                                      \
+        ));                                                                             \
     } while (0)
 
     do {
@@ -2364,10 +2351,11 @@ CodeGenX64::gen(CallInst *inst)
         }
     } while (false);
 #undef call_set_argument_register
-    block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::CallPreserve(call_inst));
-    for (auto i = inst->arguments_size() - 1; i >= 6; --i) {
-        block_map[inst->getOwnerBlock()]->inst_list.emplace_back(
-            new X64::Push(inst_result[inst->getArgumentByIndex(i)]));
+    if (inst->arguments_size()) {
+        for (auto i = inst->arguments_size() - 1; i >= 6; --i) {
+            block_map[inst->getOwnerBlock()]->inst_list.emplace_back(
+                new X64::Push(inst_result[inst->getArgumentByIndex(i)]));
+        }
     }
     block_map[inst->getOwnerBlock()]->inst_list.emplace_back(call_inst);
     block_map[inst->getOwnerBlock()]->inst_list.emplace_back(new X64::Mov(

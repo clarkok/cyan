@@ -27,6 +27,7 @@ public:
         K_STRUCT,
         K_CONCEPT,
         K_FUNCTION,
+        K_IMPORTED,
         K_TEMPLATE_ARG,
         K_PRIMITIVE,
     };
