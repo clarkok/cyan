@@ -18,10 +18,9 @@ class UnreachableCodeEliminater : public Optimizer
 
     void markUnreachableBlocks(Function *func);
     void combineSplitBlocks(Function *func);
-    void clearUnreachableBlocks(Function *func);
     void unregisterPhiInBlock(BasicBlock *block, BasicBlock *preceder);
-    void unregisterPhi(BasicBlock *block, BasicBlock *preceder);
     void resolvePhiPreceders(Function *func);
+    void clearUnreachableBlocks(Function *func);
 public:
     UnreachableCodeEliminater(IR *ir_)
         : Optimizer(ir_)

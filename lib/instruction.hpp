@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <algorithm>
+#include <type_traits>
 
 #include "type.hpp"
 #include "ir.hpp"
@@ -69,17 +70,17 @@ public:
     setOwnerBlock(BasicBlock *owner_block)
     { return this->owner_block = owner_block; }
 
-    template <typename T>
-    bool is() const
-    { return dynamic_cast<const T*>(this) != nullptr; }
-
-    template <typename T>
+    template <typename T, typename std::enable_if<std::is_base_of<Instruction, T>::value>::type* = nullptr >
     const T* to() const
     { return dynamic_cast<const T*>(this); }
 
-    template <typename T>
+    template <typename T, typename std::enable_if<std::is_base_of<Instruction, T>::value>::type* = nullptr >
     T* to()
     { return dynamic_cast<T*>(this); }
+
+    template <typename T>
+    bool is() const
+    { return this->to<T>() != nullptr; }
 
     virtual std::string to_string() const = 0;
     virtual void codegen(CodeGen *) = 0;

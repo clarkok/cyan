@@ -127,6 +127,19 @@ struct BasicBlock
         else_block = other->else_block;
     }
 
+    inline bool
+    isDominatedBy(BasicBlock *block)
+    {
+        auto ptr = dominator;
+        while (ptr) {
+            if (ptr == block) {
+                return true;
+            }
+            ptr = ptr->dominator;
+        }
+        return false;
+    }
+
     std::ostream &output(std::ostream &os) const;
 };
 

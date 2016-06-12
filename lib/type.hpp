@@ -14,6 +14,7 @@
 #include <limits>
 #include <memory>
 #include <functional>
+#include <type_traits>
 
 #include "cyan.hpp"
 
@@ -30,11 +31,11 @@ public:
     virtual size_t size() const = 0;
     virtual std::string to_string() const = 0;
 
-    template <typename T>
+    template <typename T, typename std::enable_if<std::is_base_of<Type, T>::value>::type* = nullptr >
     T* to()
     { return dynamic_cast<T*>(this); }
 
-    template <typename T>
+    template <typename T, typename std::enable_if<std::is_base_of<Type, T>::value>::type* = nullptr >
     const T* to() const
     { return dynamic_cast<const T*>(this); }
 

@@ -1,3 +1,5 @@
+function print_str(str: i8[]);
+
 concept Person {
     function getID() : i32;
     function getAge() : i32;
@@ -39,5 +41,5 @@ function deletePerson(target : Person) {
 
 function main() {
     let student = newStudent("test", 1, 2);
-    student.Person.getName();
+    print_str(student.Person.getName());
 }

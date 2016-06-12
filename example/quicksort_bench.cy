@@ -25,11 +25,6 @@ function partition(a : i64[], lo : i64, hi : i64) : i64 {
 
 function quicksort(a : i64[], lo : i64, hi : i64) {
     if (lo < hi) {
-        print_int(lo);
-        print_str("~");
-        print_int(hi);
-        print_str("\n");
-
         let p = partition(a, lo, hi);
         quicksort(a, lo, p - 1);
         quicksort(a, p + 1, hi);
@@ -37,24 +32,12 @@ function quicksort(a : i64[], lo : i64, hi : i64) {
 }
 
 function main() {
-    let n = 100;
+    let n = 1000000;
     let a = new i64[n + 1];
     let i = 0;
     while (i < n) {
         a[i] = rand() % 1000;
-        print_int(a[i]);
-        print_str(" ");
         i = i + 1;
     }
-    print_str("\n");
-
     quicksort(a, 0, n - 1);
-
-    i = 0;
-    while (i < n) {
-        print_int(a[i]);
-        print_str(" ");
-        i = i + 1;
-    }
-    print_str("\n");
 }

@@ -21,10 +21,10 @@ UnreachableCodeEliminater::markUnreachableBlocks(Function *func)
             if (block_ptr->condition->is<SignedImmInst>()) {
                 auto value = block_ptr->condition->to<SignedImmInst>()->getValue();
                 if (value) {
-                    unregisterPhi(block_ptr->else_block, block_ptr.get());
+                    unregisterPhiInBlock(block_ptr->else_block, block_ptr.get());
                 }
                 else {
-                    unregisterPhi(block_ptr->then_block, block_ptr.get());
+                    unregisterPhiInBlock(block_ptr->then_block, block_ptr.get());
                     block_ptr->then_block = block_ptr->else_block;
                 }
                 block_ptr->else_block = nullptr;
@@ -33,10 +33,10 @@ UnreachableCodeEliminater::markUnreachableBlocks(Function *func)
             else if (block_ptr->condition->is<UnsignedImmInst>()) {
                 auto value = block_ptr->condition->to<UnsignedImmInst>()->getValue();
                 if (value) {
-                    unregisterPhi(block_ptr->else_block, block_ptr.get());
+                    unregisterPhiInBlock(block_ptr->else_block, block_ptr.get());
                 }
                 else {
-                    unregisterPhi(block_ptr->then_block, block_ptr.get());
+                    unregisterPhiInBlock(block_ptr->then_block, block_ptr.get());
                     block_ptr->then_block = block_ptr->else_block;
                 }
                 block_ptr->else_block = nullptr;
@@ -85,17 +85,6 @@ UnreachableCodeEliminater::combineSplitBlocks(Function *func)
 }
 
 void
-UnreachableCodeEliminater::clearUnreachableBlocks(Function *func)
-{
-    func->block_list.remove_if(
-        [func](const std::unique_ptr<BasicBlock> &block_ptr) {
-            if (block_ptr.get() == func->block_list.front().get()) { return false; }
-            return block_ptr->preceders.size() == 0;
-        }
-    );
-}
-
-void
 UnreachableCodeEliminater::unregisterPhiInBlock(BasicBlock *block, BasicBlock *preceder)
 {
     assert(block->preceders.find(preceder) != block->preceders.end());
@@ -114,20 +103,6 @@ UnreachableCodeEliminater::unregisterPhiInBlock(BasicBlock *block, BasicBlock *p
 }
 
 void
-UnreachableCodeEliminater::unregisterPhi(BasicBlock *block, BasicBlock *preceder)
-{
-    unregisterPhiInBlock(block, preceder);
-    if (!block->preceders.size()) {
-        if (block->then_block) {
-            unregisterPhi(block->then_block, block);
-        }
-        if (block->else_block) {
-            unregisterPhi(block->else_block, block);
-        }
-    }
-}
-
-void
 UnreachableCodeEliminater::resolvePhiPreceders(Function *func)
 {
     for (auto &block_ptr : func->block_list) {
@@ -141,4 +116,15 @@ UnreachableCodeEliminater::resolvePhiPreceders(Function *func)
             }
         }
     }
+}
+
+void
+UnreachableCodeEliminater::clearUnreachableBlocks(Function *func)
+{
+    func->block_list.remove_if(
+        [func](const std::unique_ptr<BasicBlock> &block_ptr) {
+            if (block_ptr.get() == func->block_list.front().get()) { return false; }
+            return block_ptr->preceders.size() == 0;
+        }
+    );
 }

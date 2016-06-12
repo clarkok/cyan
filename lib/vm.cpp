@@ -246,76 +246,18 @@ vm::VirtualMachine::Generate::generateFunc(::cyan::Function *func)
         }
     }
 
+    /*
     std::cerr << func->getName() << std::endl;
     std::cerr << "  Block Map:" << std::endl;
     for (auto &block_pair : block_map) {
         std::cerr << "    " << block_pair.first->getName() << "\t" << block_pair.second << std::endl;
     }
-    std::cerr << "  Inst Map:" << std::endl;
+    std::cerr << "  Value Map:" << std::endl;
     for (auto &value_pair : value_map) {
         std::cerr << "    " << value_pair.first->getName() << "\t" << value_pair.second << std::endl;
     }
     std::cerr << std::endl;
-}
-
-cyan::vm::TypeT
-vm::VirtualMachine::Generate::resolveType(::cyan::Instruction *inst)
-{
-    if (inst->is<AddInst>() || inst->is<SubInst>()) {
-        auto bin_inst = inst->to<BinaryInst>();
-        if (
-            bin_inst->getLeft()->getType()->is<PointerType>() ||
-            bin_inst->getLeft()->getType()->is<VTableType>() ||
-            bin_inst->getRight()->getType()->is<PointerType>() ||
-            bin_inst->getRight()->getType()->is<VTableType>()
-        ) {
-            return get_type(T_POINTER, __builtin_ctz(CYAN_PRODUCT_BYTES));
-        }
-        else if (
-            bin_inst->getLeft()->getType()->is<UnsignedIntegerType>() ||
-            bin_inst->getRight()->getType()->is<UnsignedIntegerType>()
-        ) {
-            return get_type(T_UNSIGNED, 0);
-        }
-        else {
-            return get_type(T_SIGNED, 0);
-        }
-    }
-    else if (inst->is<BinaryInst>()) {
-        auto bin_inst = inst->to<BinaryInst>();
-        assert(bin_inst->getLeft()->getType()->is<NumericType>() &&
-               bin_inst->getRight()->getType()->is<NumericType>());
-        if (bin_inst->getLeft()->getType()->is<UnsignedIntegerType>() ||
-            bin_inst->getRight()->getType()->is<UnsignedIntegerType>()) {
-            return get_type(T_UNSIGNED, 0);
-        }
-        else {
-            return get_type(T_SIGNED, 0);
-        }
-    }
-    else if (inst->is<StoreInst>()) {
-        auto store_inst = inst->to<StoreInst>();
-        if (store_inst->getValue()->getType()->is<NumericType>()) {
-            auto bits = store_inst->getValue()->getType()->to<NumericType>()->getBitwiseWidth();
-            return get_type(T_POINTER, __builtin_ctz(bits / 8));
-        }
-        else {
-            return get_type(T_POINTER, __builtin_ctz(CYAN_PRODUCT_BYTES));
-        }
-    }
-    else if (inst->is<LoadInst>()) {
-        auto load_inst = inst->to<LoadInst>();
-        if (load_inst->getAddress()->getType()->to<PointerType>()->getBaseType()->is<NumericType>()) {
-            auto bits = load_inst->getAddress()->getType()->to<PointerType>()->getBaseType()->to<NumericType>()->getBitwiseWidth();
-            return get_type(T_POINTER, __builtin_ctz(bits / 8));
-        }
-        else {
-            return get_type(T_POINTER, __builtin_ctz(CYAN_PRODUCT_BYTES));
-        }
-    }
-    else {
-        return 0;
-    }
+    */
 }
 
 void
@@ -327,7 +269,7 @@ vm::VirtualMachine::Generate::gen(SignedImmInst *inst)
 {
     current_func->inst_list.emplace_back(
         I_LI,
-        get_type(T_SIGNED, 0),
+        0,
         value_map.at(inst),
         inst->getValue()
     );
@@ -338,7 +280,7 @@ vm::VirtualMachine::Generate::gen(UnsignedImmInst *inst)
 {
     current_func->inst_list.emplace_back(
         I_LI,
-        get_type(T_UNSIGNED, 0),
+        0,
         value_map.at(inst),
         inst->getValue()
     );
@@ -354,13 +296,17 @@ vm::VirtualMachine::Generate::gen(GlobalInst *inst)
         auto temp_reg = current_func->register_nr++;
         current_func->inst_list.emplace_back(
             I_GLOB,
-            get_type(T_POINTER, 0),
+            0,
             temp_reg,
             global_map.at(inst->getValue())
         );
         current_func->inst_list.emplace_back(
-            I_LOAD,
-            get_type(T_POINTER, __builtin_ctz(CYAN_PRODUCT_BYTES)),
+#if __CYAN_64__
+            I_LOAD64U,
+#else
+            I_LOAD32U,
+#endif
+            0,
             value_map.at(inst),
             temp_reg,
             0
@@ -369,7 +315,7 @@ vm::VirtualMachine::Generate::gen(GlobalInst *inst)
     else {
         current_func->inst_list.emplace_back(
             I_GLOB,
-            get_type(T_POINTER, 0),
+            0,
             value_map.at(inst),
             global_map.at(inst->getValue())
         );
@@ -381,7 +327,7 @@ vm::VirtualMachine::Generate::gen(ArgInst *inst)
 {
     current_func->inst_list.emplace_back(
         I_ARG,
-        get_type(T_POINTER, 0),
+        0,
         value_map.at(inst),
         inst->getValue()
     );
@@ -392,33 +338,75 @@ vm::VirtualMachine::Generate::gen(AddInst *inst)
 {
     if (
         inst->getRight()->getType()->is<PointerType>() ||
-        inst->getRight()->getType()->is<VTableType>()
+        inst->getRight()->getType()->is<VTableType>() ||
+        inst->getRight()->getType()->is<StructType>() ||
+        inst->getRight()->getType()->is<ConceptType>() ||
+        inst->getRight()->getType()->is<FunctionType>()
     ) {
-        current_func->inst_list.emplace_back(
-            I_ADD,
-            resolveType(inst),
-            value_map.at(inst),
-            value_map.at(inst->getRight()),
-            value_map.at(inst->getLeft())
-        );
+        auto t = inst->getLeft();
+        inst->setLeft(inst->getRight());
+        inst->setRight(t);
+    }
+
+    ShiftT shift;
+    if (inst->getLeft()->getType()->is<PointerType>()) {
+        auto base_type = inst->getLeft()->getType()->to<PointerType>()->getBaseType();
+        if (base_type->is<NumericType>()) {
+            shift = __builtin_ctz(base_type->to<NumericType>()->getBitwiseWidth()) - 3;
+        }
+        else {
+            shift = __builtin_ctz(CYAN_PRODUCT_BYTES);
+        }
+    }
+    else if (
+        inst->getLeft()->getType()->is<VTableType>() ||
+        inst->getLeft()->getType()->is<StructType>() ||
+        inst->getLeft()->getType()->is<ConceptType>() ||
+        inst->getLeft()->getType()->is<FunctionType>()
+    ) {
+        shift = __builtin_ctz(CYAN_PRODUCT_BYTES);
     }
     else {
-        current_func->inst_list.emplace_back(
-            I_ADD,
-            resolveType(inst),
-            value_map.at(inst),
-            value_map.at(inst->getLeft()),
-            value_map.at(inst->getRight())
-        );
+        shift = 0;
     }
+
+    current_func->inst_list.emplace_back(
+        I_ADD,
+        shift,
+        value_map.at(inst),
+        value_map.at(inst->getLeft()),
+        value_map.at(inst->getRight())
+    );
 }
 
 void
 vm::VirtualMachine::Generate::gen(SubInst *inst)
 {
+    ShiftT shift;
+    if (inst->getLeft()->getType()->is<PointerType>()) {
+        auto base_type = inst->getLeft()->getType()->to<PointerType>()->getBaseType();
+        if (base_type->is<NumericType>()) {
+            shift = __builtin_ctz(base_type->to<NumericType>()->getBitwiseWidth()) - 3;
+        }
+        else {
+            shift = __builtin_ctz(CYAN_PRODUCT_BYTES);
+        }
+    }
+    else if (
+        inst->getLeft()->getType()->is<VTableType>() ||
+        inst->getLeft()->getType()->is<StructType>() ||
+        inst->getLeft()->getType()->is<ConceptType>() ||
+        inst->getLeft()->getType()->is<FunctionType>()
+    ) {
+        shift = __builtin_ctz(CYAN_PRODUCT_BYTES);
+    }
+    else {
+        shift = 0;
+    }
+
     current_func->inst_list.emplace_back(
         I_SUB,
-        resolveType(inst),
+        shift,
         value_map.at(inst),
         value_map.at(inst->getLeft()),
         value_map.at(inst->getRight())
@@ -428,9 +416,12 @@ vm::VirtualMachine::Generate::gen(SubInst *inst)
 void
 vm::VirtualMachine::Generate::gen(MulInst *inst)
 {
+    bool use_unsigned = (inst->getLeft()->getType()->is<UnsignedIntegerType>() ||
+                         inst->getRight()->getType()->is<UnsignedIntegerType>());
+
     current_func->inst_list.emplace_back(
-        I_MUL,
-        resolveType(inst),
+        use_unsigned ? I_MULU : I_MUL,
+        0,
         value_map.at(inst),
         value_map.at(inst->getLeft()),
         value_map.at(inst->getRight())
@@ -440,9 +431,12 @@ vm::VirtualMachine::Generate::gen(MulInst *inst)
 void
 vm::VirtualMachine::Generate::gen(DivInst *inst)
 {
+    bool use_unsigned = (inst->getLeft()->getType()->is<UnsignedIntegerType>() ||
+                         inst->getRight()->getType()->is<UnsignedIntegerType>());
+
     current_func->inst_list.emplace_back(
-        I_DIV,
-        resolveType(inst),
+        use_unsigned ? I_DIVU : I_DIV,
+        0,
         value_map.at(inst),
         value_map.at(inst->getLeft()),
         value_map.at(inst->getRight())
@@ -452,9 +446,12 @@ vm::VirtualMachine::Generate::gen(DivInst *inst)
 void
 vm::VirtualMachine::Generate::gen(ModInst *inst)
 {
+    bool use_unsigned = (inst->getLeft()->getType()->is<UnsignedIntegerType>() ||
+                         inst->getRight()->getType()->is<UnsignedIntegerType>());
+
     current_func->inst_list.emplace_back(
-        I_MOD,
-        resolveType(inst),
+        use_unsigned ? I_MODU : I_MOD,
+        0,
         value_map.at(inst),
         value_map.at(inst->getLeft()),
         value_map.at(inst->getRight())
@@ -464,9 +461,11 @@ vm::VirtualMachine::Generate::gen(ModInst *inst)
 void
 vm::VirtualMachine::Generate::gen(ShlInst *inst)
 {
+    bool use_unsigned = inst->getLeft()->getType()->is<UnsignedIntegerType>();
+
     current_func->inst_list.emplace_back(
-        I_SHL,
-        resolveType(inst),
+        use_unsigned ? I_SHLU : I_SHL,
+        0,
         value_map.at(inst),
         value_map.at(inst->getLeft()),
         value_map.at(inst->getRight())
@@ -476,9 +475,11 @@ vm::VirtualMachine::Generate::gen(ShlInst *inst)
 void
 vm::VirtualMachine::Generate::gen(ShrInst *inst)
 {
+    bool use_unsigned = inst->getLeft()->getType()->is<UnsignedIntegerType>();
+
     current_func->inst_list.emplace_back(
-        I_SHR,
-        resolveType(inst),
+        use_unsigned ? I_SHRU : I_SHR,
+        0,
         value_map.at(inst),
         value_map.at(inst->getLeft()),
         value_map.at(inst->getRight())
@@ -490,7 +491,7 @@ vm::VirtualMachine::Generate::gen(OrInst *inst)
 {
     current_func->inst_list.emplace_back(
         I_OR,
-        resolveType(inst),
+        0,
         value_map.at(inst),
         value_map.at(inst->getLeft()),
         value_map.at(inst->getRight())
@@ -502,7 +503,7 @@ vm::VirtualMachine::Generate::gen(AndInst *inst)
 {
     current_func->inst_list.emplace_back(
         I_AND,
-        resolveType(inst),
+        0,
         value_map.at(inst),
         value_map.at(inst->getLeft()),
         value_map.at(inst->getRight())
@@ -514,7 +515,7 @@ vm::VirtualMachine::Generate::gen(NorInst *inst)
 {
     current_func->inst_list.emplace_back(
         I_NOR,
-        resolveType(inst),
+        0,
         value_map.at(inst),
         value_map.at(inst->getLeft()),
         value_map.at(inst->getRight())
@@ -526,7 +527,7 @@ vm::VirtualMachine::Generate::gen(XorInst *inst)
 {
     current_func->inst_list.emplace_back(
         I_XOR,
-        resolveType(inst),
+        0,
         value_map.at(inst),
         value_map.at(inst->getLeft()),
         value_map.at(inst->getRight())
@@ -538,7 +539,7 @@ vm::VirtualMachine::Generate::gen(SeqInst *inst)
 {
     current_func->inst_list.emplace_back(
         I_SEQ,
-        resolveType(inst),
+        0,
         value_map.at(inst),
         value_map.at(inst->getLeft()),
         value_map.at(inst->getRight())
@@ -548,9 +549,12 @@ vm::VirtualMachine::Generate::gen(SeqInst *inst)
 void
 vm::VirtualMachine::Generate::gen(SltInst *inst)
 {
+    bool use_unsigned = (inst->getLeft()->getType()->is<UnsignedIntegerType>() ||
+                         inst->getRight()->getType()->is<UnsignedIntegerType>());
+
     current_func->inst_list.emplace_back(
-        I_SLT,
-        resolveType(inst),
+        use_unsigned ? I_SLTU : I_SLT,
+        0,
         value_map.at(inst),
         value_map.at(inst->getLeft()),
         value_map.at(inst->getRight())
@@ -560,9 +564,12 @@ vm::VirtualMachine::Generate::gen(SltInst *inst)
 void
 vm::VirtualMachine::Generate::gen(SleInst *inst)
 {
+    bool use_unsigned = (inst->getLeft()->getType()->is<UnsignedIntegerType>() ||
+                         inst->getRight()->getType()->is<UnsignedIntegerType>());
+
     current_func->inst_list.emplace_back(
-        I_SLE,
-        resolveType(inst),
+        use_unsigned ? I_SLEU : I_SLE,
+        0,
         value_map.at(inst),
         value_map.at(inst->getLeft()),
         value_map.at(inst->getRight())
@@ -572,9 +579,34 @@ vm::VirtualMachine::Generate::gen(SleInst *inst)
 void
 vm::VirtualMachine::Generate::gen(LoadInst *inst)
 {
+    OperatorT op;
+    if (inst->getAddress()->getType()->is<PointerType>()) {
+        auto base_type = inst->getAddress()->getType()->to<PointerType>()->getBaseType();
+        if (base_type->is<NumericType>()) {
+            auto bits = base_type->to<NumericType>()->getBitwiseWidth();
+            auto shift = __builtin_ctz(bits);
+            auto is_unsigned = base_type->is<UnsignedIntegerType>() ? 1 : 0;
+            op = I_LOAD8 + (shift - 3) * 2 + is_unsigned;
+        }
+        else {
+#if __CYAN_64__
+            op = I_LOAD64U;
+#else
+            op = I_LOAD32U;
+#endif
+        }
+    }
+    else {
+#if __CYAN_64__
+        op = I_LOAD64U;
+#else
+        op = I_LOAD32U;
+#endif
+    }
+
     current_func->inst_list.emplace_back(
-        I_LOAD,
-        resolveType(inst),
+        op,
+        0,
         value_map.at(inst),
         value_map.at(inst->getAddress()),
         0
@@ -584,9 +616,25 @@ vm::VirtualMachine::Generate::gen(LoadInst *inst)
 void
 vm::VirtualMachine::Generate::gen(StoreInst *inst)
 {
+    OperatorT op;
+    auto base_type = inst->getAddress()->getType()->to<PointerType>()->getBaseType();
+    if (base_type->is<NumericType>()) {
+        auto bits = base_type->to<NumericType>()->getBitwiseWidth();
+        auto shift = __builtin_ctz(bits);
+        auto is_unsigned = base_type->is<UnsignedIntegerType>() ? 1 : 0;
+        op = I_STORE8 + (shift - 3) * 2 + is_unsigned;
+    }
+    else {
+#if __CYAN_64__
+        op = I_STORE64U;
+#else
+        op = I_STORE32U;
+#endif
+    }
+
     current_func->inst_list.emplace_back(
-        I_STORE,
-        resolveType(inst),
+        op,
+        0,
         value_map.at(inst),
         value_map.at(inst->getAddress()),
         value_map.at(inst->getValue())
@@ -598,7 +646,7 @@ vm::VirtualMachine::Generate::gen(AllocaInst *inst)
 {
     current_func->inst_list.emplace_back(
         I_ALLOC,
-        resolveType(inst),
+        0,
         value_map.at(inst),
         value_map.at(inst->getSpace()),
         0
@@ -621,7 +669,7 @@ vm::VirtualMachine::Generate::gen(CallInst *inst)
 
     current_func->inst_list.emplace_back(
         I_CALL,
-        resolveType(inst),
+        0,
         value_map.at(inst),
         value_map.at(inst->getFunction()),
         0
@@ -642,7 +690,7 @@ vm::VirtualMachine::Generate::gen(RetInst *inst)
 {
     current_func->inst_list.emplace_back(
         I_RET,
-        resolveType(inst),
+        0,
         value_map.at(inst),
         inst->getReturnValue() ? value_map.at(inst->getReturnValue()) : 0,
         0
@@ -654,11 +702,70 @@ vm::VirtualMachine::Generate::gen(NewInst *inst)
 {
     current_func->inst_list.emplace_back(
         I_NEW,
-        resolveType(inst),
+        0,
         value_map.at(inst),
         value_map.at(inst->getSpace()),
         0
     );
+
+    if (inst->getType()->is<StructType>()) {
+        auto struct_type = inst->getType()->to<StructType>();
+        auto global_inst = current_func->register_nr++;
+        auto addr_inst = current_func->register_nr++;
+        auto one_inst = current_func->register_nr++;
+        current_func->inst_list.emplace_back(
+            I_LI,
+            0,
+            addr_inst,
+            struct_type->members_size()
+        );
+        current_func->inst_list.emplace_back(
+            I_LI,
+            0,
+            one_inst,
+            1
+        );
+        current_func->inst_list.emplace_back(
+            I_ADD,
+            __builtin_ctz(CYAN_PRODUCT_BYTES),
+            addr_inst,
+            value_map.at(inst),
+            addr_inst
+        );
+        for (size_t i = 0; i < struct_type->concept_size(); ++i) {
+            current_func->inst_list.emplace_back(
+                I_GLOB,
+                0,
+                global_inst,
+                global_map.at(
+                    ir->type_pool->getCastedStructType(
+                        struct_type,
+                        struct_type->getConceptByOffset(
+                            static_cast<int>(struct_type->members_size() + i)
+                        )
+                    )->to_string() + "__vtable"
+                )
+            );
+            current_func->inst_list.emplace_back(
+#if __CYAN_64__
+                I_STORE64U,
+#else
+                I_STORE32U,
+#endif
+                0,
+                0,
+                addr_inst,
+                global_inst
+            );
+            current_func->inst_list.emplace_back(
+                I_ADD,
+                __builtin_ctz(CYAN_PRODUCT_BYTES),
+                addr_inst,
+                addr_inst,
+                one_inst
+            );
+        }
+    }
 }
 
 void
@@ -666,7 +773,7 @@ vm::VirtualMachine::Generate::gen(DeleteInst *inst)
 {
     current_func->inst_list.emplace_back(
         I_DELETE,
-        resolveType(inst),
+        0,
         value_map.at(inst),
         value_map.at(inst->getTarget()),
         0
@@ -682,7 +789,7 @@ vm::VirtualMachine::Generate::gen(vm::MovInst *inst)
 {
     current_func->inst_list.emplace_back(
         I_MOV,
-        resolveType(inst),
+        0,
         value_map.at(inst),
         value_map.at(inst->getSource()),
         0
@@ -694,74 +801,147 @@ vm::VirtualMachine::run()
 {
     Frame *current_frame = frame_stack.top().get();
     const Instruction *pc = current_frame->pc;
+    auto inst = pc;
 
+#if CYAN_USE_COMPUTED_GOTO
+
+#define VM_CASE(label)          label:
+#define VM_DISPATCH()                       \
+    do {                                    \
+        inst = pc++;                        \
+        goto *DISPATCH_TABLE[inst->i_op];   \
+    } while(false)
+
+#else
+
+#define VM_CASE(label)          case I_##label:
+#define VM_DISPATCH()           break
+
+#endif
+
+#if CYAN_USE_COMPUTED_GOTO
+    static void *DISPATCH_TABLE[] = {
+        &&UNKNOWN,
+        &&ARG,
+        &&BR,
+        &&BNR,
+        &&GLOB,
+        &&JUMP,
+        &&LI,
+        &&ADD,
+        &&ALLOC,
+        &&AND,
+        &&CALL,
+        &&DELETE,
+        &&DIV,
+        &&DIVU,
+        &&LOAD8,
+        &&LOAD8U,
+        &&LOAD16,
+        &&LOAD16U,
+        &&LOAD32,
+        &&LOAD32U,
+        &&LOAD64,
+        &&LOAD64U,
+        &&MOD,
+        &&MODU,
+        &&MOV,
+        &&MUL,
+        &&MULU,
+        &&NEW,
+        &&NOR,
+        &&OR,
+        &&POP,
+        &&PUSH,
+        &&RET,
+        &&SEQ,
+        &&SHL,
+        &&SHLU,
+        &&SHR,
+        &&SHRU,
+        &&SLE,
+        &&SLEU,
+        &&SLT,
+        &&SLTU,
+        &&STORE8,
+        &&STORE8U,
+        &&STORE16,
+        &&STORE16U,
+        &&STORE32,
+        &&STORE32U,
+        &&STORE64,
+        &&STORE64U,
+        &&SUB,
+        &&XOR,
+    };
+#else
     while (true) {
-        auto inst = pc++;
+        inst = pc++;
 
         switch (inst->i_op) {
-            case I_ARG:
+#endif
+            VM_CASE(ARG)
                 {
                     (*current_frame)[inst->i_rd] = reinterpret_cast<Slot>(
-                            stack.data() + stack_pointer + inst->i_imm * CYAN_PRODUCT_BYTES);
-                    break;
+                            stack.data() + current_frame->frame_pointer + inst->i_imm * CYAN_PRODUCT_BYTES);
+                    VM_DISPATCH();
                 }
-            case I_BR:
+            VM_CASE(BR)
                 {
                     if ((*current_frame)[inst->i_rd]) {
                         pc = current_frame->func->inst_list.data() + inst->i_imm;
                     }
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_BNR:
+            VM_CASE(BNR)
                 {
                     if (!(*current_frame)[inst->i_rd]) {
                         pc = current_frame->func->inst_list.data() + inst->i_imm;
                     }
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_GLOB:
+            VM_CASE(GLOB)
                 {
                     (*current_frame)[inst->i_rd] = reinterpret_cast<Slot>(
                             globals.data() + inst->i_imm);
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_JUMP:
+            VM_CASE(JUMP)
                 {
                     pc = current_frame->func->inst_list.data() + inst->i_imm;
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_LI:
+            VM_CASE(LI)
                 {
                     (*current_frame)[inst->i_rd] = inst->i_imm;
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_ADD:
+            VM_CASE(ADD)
                 {
                     (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] +
-                                                  ((*current_frame)[inst->i_rt] << type2shift(inst->i_type));
-                    break;
+                                                  ((*current_frame)[inst->i_rt] << inst->i_shift);
+                    VM_DISPATCH();
                 }
-            case I_ALLOC:
+            VM_CASE(ALLOC)
                 {
                     auto slots = (*current_frame)[inst->i_rs];
-                    current_frame->stack_usage += slots * CYAN_PRODUCT_BYTES;
                     (*current_frame)[inst->i_rd] = reinterpret_cast<Slot>(
                             stack.data() + (stack_pointer -= slots * CYAN_PRODUCT_BYTES)
                         );
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_AND:
+            VM_CASE(AND)
                 {
                     (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] &
                                                    (*current_frame)[inst->i_rt];
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_CALL:
+            VM_CASE(CALL)
                 {
                     auto func = reinterpret_cast<Function*>((*current_frame)[inst->i_rs]);
                     if (dynamic_cast<VMFunction*>(func)) {
                         auto vm_func = dynamic_cast<VMFunction*>(func);
-                        frame_stack.emplace(new Frame(vm_func));
+                        frame_stack.emplace(new Frame(vm_func, stack_pointer));
                         current_frame->pc = pc - 1;
                         current_frame = frame_stack.top().get();
                         pc = current_frame->pc;
@@ -770,232 +950,251 @@ vm::VirtualMachine::run()
                         auto lib_func = dynamic_cast<LibFunction*>(func);
                         (*current_frame)[inst->i_rd] = lib_func->call(reinterpret_cast<const Slot *>(stack.data() + stack_pointer));
                     }
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_DELETE:
+            VM_CASE(DELETE)
                 {
                     std::free(reinterpret_cast<void*>((*current_frame)[inst->i_rs]));
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_DIV:
+            VM_CASE(DIV)
                 {
-                    if (type2type(inst->i_type) == T_SIGNED) {
-                        (*current_frame)[inst->i_rd] = static_cast<SignedSlot>((*current_frame)[inst->i_rs]) /
-                                                       static_cast<SignedSlot>((*current_frame)[inst->i_rt]);
-                    }
-                    else {
-                        (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] /
-                                                       (*current_frame)[inst->i_rt];
-                    }
-                    break;
+                    (*current_frame)[inst->i_rd] = static_cast<SignedSlot>((*current_frame)[inst->i_rs]) /
+                                                   static_cast<SignedSlot>((*current_frame)[inst->i_rt]);
+                    VM_DISPATCH();
                 }
-            case I_LOAD:
+            VM_CASE(DIVU)
                 {
-                    switch ((type2shift(inst->i_type) << 1) | (type2type(inst->i_type) == T_SIGNED)) {
-                        case 0:
-                            (*current_frame)[inst->i_rd] = *reinterpret_cast<const uint8_t*>((*current_frame)[inst->i_rs]);
-                            break;
-                        case 1:
-                            (*current_frame)[inst->i_rd] = *reinterpret_cast<const int8_t*>((*current_frame)[inst->i_rs]);
-                            break;
-                        case 2:
-                            (*current_frame)[inst->i_rd] = *reinterpret_cast<const uint16_t*>((*current_frame)[inst->i_rs]);
-                            break;
-                        case 3:
-                            (*current_frame)[inst->i_rd] = *reinterpret_cast<const int16_t*>((*current_frame)[inst->i_rs]);
-                            break;
-                        case 4:
-                            (*current_frame)[inst->i_rd] = *reinterpret_cast<const uint32_t*>((*current_frame)[inst->i_rs]);
-                            break;
-                        case 5:
-                            (*current_frame)[inst->i_rd] = *reinterpret_cast<const int32_t*>((*current_frame)[inst->i_rs]);
-                            break;
-                        case 6:
-                            (*current_frame)[inst->i_rd] = *reinterpret_cast<const uint64_t*>((*current_frame)[inst->i_rs]);
-                            break;
-                        case 7:
-                            (*current_frame)[inst->i_rd] = *reinterpret_cast<const int64_t*>((*current_frame)[inst->i_rs]);
-                            break;
-                        default:
-                            assert(false);
-                    }
-                    break;
+                    (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] /
+                                                   (*current_frame)[inst->i_rt];
+                    VM_DISPATCH();
                 }
-            case I_MOD:
+            VM_CASE(LOAD8)
                 {
-                    if (type2type(inst->i_type) == T_SIGNED) {
-                        (*current_frame)[inst->i_rd] = static_cast<SignedSlot>((*current_frame)[inst->i_rs]) %
-                                                       static_cast<SignedSlot>((*current_frame)[inst->i_rt]);
-                    }
-                    else {
-                        (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] %
-                                                       (*current_frame)[inst->i_rt];
-                    }
-                    break;
+                    (*current_frame)[inst->i_rd] = *reinterpret_cast<const int8_t*>((*current_frame)[inst->i_rs]);
+                    VM_DISPATCH();
                 }
-            case I_MOV:
+            VM_CASE(LOAD8U)
+                {
+                    (*current_frame)[inst->i_rd] = *reinterpret_cast<const uint8_t*>((*current_frame)[inst->i_rs]);
+                    VM_DISPATCH();
+                }
+            VM_CASE(LOAD16)
+                {
+                    (*current_frame)[inst->i_rd] = *reinterpret_cast<const int16_t*>((*current_frame)[inst->i_rs]);
+                    VM_DISPATCH();
+                }
+            VM_CASE(LOAD16U)
+                {
+                    (*current_frame)[inst->i_rd] = *reinterpret_cast<const uint16_t*>((*current_frame)[inst->i_rs]);
+                    VM_DISPATCH();
+                }
+            VM_CASE(LOAD32)
+                {
+                    (*current_frame)[inst->i_rd] = *reinterpret_cast<const int32_t*>((*current_frame)[inst->i_rs]);
+                    VM_DISPATCH();
+                }
+            VM_CASE(LOAD32U)
+                {
+                    (*current_frame)[inst->i_rd] = *reinterpret_cast<const uint32_t*>((*current_frame)[inst->i_rs]);
+                    VM_DISPATCH();
+                }
+            VM_CASE(LOAD64)
+                {
+                    (*current_frame)[inst->i_rd] = *reinterpret_cast<const int64_t*>((*current_frame)[inst->i_rs]);
+                    VM_DISPATCH();
+                }
+            VM_CASE(LOAD64U)
+                {
+                    (*current_frame)[inst->i_rd] = *reinterpret_cast<const uint64_t*>((*current_frame)[inst->i_rs]);
+                    VM_DISPATCH();
+                }
+            VM_CASE(MOD)
+                {
+                    (*current_frame)[inst->i_rd] = static_cast<SignedSlot>((*current_frame)[inst->i_rs]) %
+                                                   static_cast<SignedSlot>((*current_frame)[inst->i_rt]);
+                    VM_DISPATCH();
+                }
+            VM_CASE(MODU)
+                {
+                   (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] %
+                                                   (*current_frame)[inst->i_rt];
+                   VM_DISPATCH();
+                }
+            VM_CASE(MOV)
                 {
                     (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs];
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_MUL:
+            VM_CASE(MUL)
                 {
-                    if (type2type(inst->i_type) == T_SIGNED) {
-                        (*current_frame)[inst->i_rd] = static_cast<SignedSlot>((*current_frame)[inst->i_rs]) *
-                                                       static_cast<SignedSlot>((*current_frame)[inst->i_rt]);
-                    }
-                    else {
-                        (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] *
-                                                       (*current_frame)[inst->i_rt];
-                    }
-                    break;
+                    (*current_frame)[inst->i_rd] = static_cast<SignedSlot>((*current_frame)[inst->i_rs]) *
+                                                   static_cast<SignedSlot>((*current_frame)[inst->i_rt]);
+                    VM_DISPATCH();
                 }
-            case I_NEW:
+            VM_CASE(MULU)
+                {
+                    (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] *
+                                                   (*current_frame)[inst->i_rt];
+                    VM_DISPATCH();
+                }
+            VM_CASE(NEW)
                 {
                     (*current_frame)[inst->i_rd] = reinterpret_cast<Slot>(std::malloc((*current_frame)[inst->i_rs]));
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_NOR:
+            VM_CASE(NOR)
                 {
                     (*current_frame)[inst->i_rd] = ~((*current_frame)[inst->i_rs] |
                                                      (*current_frame)[inst->i_rt]);
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_OR:
+            VM_CASE(OR)
                 {
                     (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] |
                                                    (*current_frame)[inst->i_rt];
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_POP:
+            VM_CASE(POP)
                 {
                     auto slots = inst->i_imm;
-                    current_frame->stack_usage -= slots * CYAN_PRODUCT_BYTES;
                     stack_pointer += slots * CYAN_PRODUCT_BYTES;
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_PUSH:
+            VM_CASE(PUSH)
                 {
-                    current_frame->stack_usage += CYAN_PRODUCT_BYTES;
                     *reinterpret_cast<Slot*>(
                         stack.data() + (stack_pointer -= CYAN_PRODUCT_BYTES)
                     ) = (*current_frame)[inst->i_rd];
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_RET:
+            VM_CASE(RET)
                 {
                     auto ret_val = (*current_frame)[inst->i_rs];
-                    stack_pointer += current_frame->stack_usage;
+                    stack_pointer = current_frame->frame_pointer;
                     frame_stack.pop();
                     if (frame_stack.empty()) { return ret_val; }
 
                     current_frame = frame_stack.top().get();
                     pc = current_frame->pc + 1;
                     (*current_frame)[current_frame->pc->i_rd] = ret_val;
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_SEQ:
+            VM_CASE(SEQ)
                 {
                     (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] ==
                                                    (*current_frame)[inst->i_rt];
-                    break;
+                    VM_DISPATCH();
                 }
-            case I_SHL:
+            VM_CASE(SHL)
                 {
-                    if (type2type(inst->i_type) == T_SIGNED) {
-                        (*current_frame)[inst->i_rd] = static_cast<SignedSlot>((*current_frame)[inst->i_rs]) <<
-                                                       static_cast<SignedSlot>((*current_frame)[inst->i_rt]);
-                    }
-                    else {
-                        (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] <<
-                                                       (*current_frame)[inst->i_rt];
-                    }
-                    break;
+                    (*current_frame)[inst->i_rd] = static_cast<SignedSlot>((*current_frame)[inst->i_rs]) <<
+                                                   static_cast<SignedSlot>((*current_frame)[inst->i_rt]);
+                    VM_DISPATCH();
                 }
-            case I_SHR:
+            VM_CASE(SHLU)
                 {
-                    if (type2type(inst->i_type) == T_SIGNED) {
-                        (*current_frame)[inst->i_rd] = static_cast<SignedSlot>((*current_frame)[inst->i_rs]) >>
-                                                       static_cast<SignedSlot>((*current_frame)[inst->i_rt]);
-                    }
-                    else {
-                        (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] >>
-                                                       (*current_frame)[inst->i_rt];
-                    }
-                    break;
+                    (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] <<
+                                                   (*current_frame)[inst->i_rt];
+                    VM_DISPATCH();
                 }
-            case I_SLE:
+            VM_CASE(SHR)
                 {
-                    if (type2type(inst->i_type) == T_SIGNED) {
-                        (*current_frame)[inst->i_rd] = static_cast<SignedSlot>((*current_frame)[inst->i_rs]) <=
-                                                       static_cast<SignedSlot>((*current_frame)[inst->i_rt]);
-                    }
-                    else {
-                        (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] <=
-                                                       (*current_frame)[inst->i_rt];
-                    }
-                    break;
+                    (*current_frame)[inst->i_rd] = static_cast<SignedSlot>((*current_frame)[inst->i_rs]) >>
+                                                   static_cast<SignedSlot>((*current_frame)[inst->i_rt]);
+                    VM_DISPATCH();
                 }
-            case I_SLT:
+            VM_CASE(SHRU)
                 {
-                    if (type2type(inst->i_type) == T_SIGNED) {
-                        (*current_frame)[inst->i_rd] = static_cast<SignedSlot>((*current_frame)[inst->i_rs]) <
-                                                       static_cast<SignedSlot>((*current_frame)[inst->i_rt]);
-                    }
-                    else {
-                        (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] <
-                                                       (*current_frame)[inst->i_rt];
-                    }
-                    break;
+                    (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] >>
+                                                   (*current_frame)[inst->i_rt];
+                    VM_DISPATCH();
                 }
-            case I_STORE:
+            VM_CASE(SLE)
                 {
-                    switch ((type2shift(inst->i_type) << 1) | (type2type(inst->i_type) == T_SIGNED)) {
-                        case 0:
-                            *reinterpret_cast<uint8_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
-                            break;
-                        case 1:
-                            *reinterpret_cast<int8_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
-                            break;
-                        case 2:
-                            *reinterpret_cast<uint16_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
-                            break;
-                        case 3:
-                            *reinterpret_cast<int16_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
-                            break;
-                        case 4:
-                            *reinterpret_cast<uint32_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
-                            break;
-                        case 5:
-                            *reinterpret_cast<int32_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
-                            break;
-                        case 6:
-                            *reinterpret_cast<uint64_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
-                            break;
-                        case 7:
-                            *reinterpret_cast<int64_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
-                            break;
-                        default:
-                            assert(false);
-                    }
-                    break;
+                    (*current_frame)[inst->i_rd] = static_cast<SignedSlot>((*current_frame)[inst->i_rs]) <=
+                                                   static_cast<SignedSlot>((*current_frame)[inst->i_rt]);
+                    VM_DISPATCH();
                 }
-            case I_SUB:
+            VM_CASE(SLEU)
+                {
+                    (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] <=
+                                                   (*current_frame)[inst->i_rt];
+                    VM_DISPATCH();
+                }
+            VM_CASE(SLT)
+                {
+                    (*current_frame)[inst->i_rd] = static_cast<SignedSlot>((*current_frame)[inst->i_rs]) <
+                                                   static_cast<SignedSlot>((*current_frame)[inst->i_rt]);
+                    VM_DISPATCH();
+                }
+            VM_CASE(SLTU)
+                {
+                    (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] <
+                                                   (*current_frame)[inst->i_rt];
+                    VM_DISPATCH();
+                }
+            VM_CASE(STORE8)
+                {
+                    *reinterpret_cast<int8_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
+                    VM_DISPATCH();
+                }
+            VM_CASE(STORE8U)
+                {
+                    *reinterpret_cast<uint8_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
+                    VM_DISPATCH();
+                }
+            VM_CASE(STORE16)
+                {
+                    *reinterpret_cast<int16_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
+                    VM_DISPATCH();
+                }
+            VM_CASE(STORE16U)
+                {
+                    *reinterpret_cast<uint16_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
+                    VM_DISPATCH();
+                }
+            VM_CASE(STORE32)
+                {
+                    *reinterpret_cast<int32_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
+                    VM_DISPATCH();
+                }
+            VM_CASE(STORE32U)
+                {
+                    *reinterpret_cast<uint32_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
+                    VM_DISPATCH();
+                }
+            VM_CASE(STORE64)
+                {
+                    *reinterpret_cast<int64_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
+                    VM_DISPATCH();
+                }
+            VM_CASE(STORE64U)
+                {
+                    *reinterpret_cast<uint64_t*>((*current_frame)[inst->i_rs]) = (*current_frame)[inst->i_rt];
+                    VM_DISPATCH();
+                }
+            VM_CASE(SUB)
                 {
                     (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] -
-                                                  ((*current_frame)[inst->i_rt] << type2shift(inst->i_type));
-                    break;
+                                                  ((*current_frame)[inst->i_rt] << inst->i_shift);
+                    VM_DISPATCH();
                 }
-            case I_XOR:
+            VM_CASE(XOR)
                 {
                     (*current_frame)[inst->i_rd] = (*current_frame)[inst->i_rs] ^
                                                    (*current_frame)[inst->i_rt];
-                    break;
+                    VM_DISPATCH();
                 }
+#if CYAN_USE_COMPUTED_GOTO
+            UNKNOWN:
+                assert(false);
+#else
             default:
                 assert(false);
         }
     }
+#endif
 }
 
 vm::Slot
@@ -1003,12 +1202,12 @@ vm::VirtualMachine::start()
 {
     auto init_func = dynamic_cast<VMFunction*>(functions.at("_init_").get());
     assert(init_func);
-    frame_stack.emplace(new Frame(init_func));
+    frame_stack.emplace(new Frame(init_func, stack_pointer));
     run();
 
     auto main_func = dynamic_cast<VMFunction*>(functions.at("main").get());
     assert(main_func);
-    frame_stack.emplace(new Frame(main_func));
+    frame_stack.emplace(new Frame(main_func, stack_pointer));
     return run();
 }
 

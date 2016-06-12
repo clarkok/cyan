@@ -10,18 +10,20 @@
 #include "cyan.hpp"
 #include "codegen.hpp"
 
+#define CYAN_USE_COMPUTED_GOTO  1
+
 namespace cyan {
 
 namespace vm {
 
 #if __CYAN_64__
 using OperatorT     = uint16_t;
-using TypeT         = uint16_t;
+using ShiftT        = uint16_t;
 using RegisterT     = uint32_t;
 using ImmediateT    = uint64_t;
 #else
 using OperatorT     = uint8_t;
-using TypeT         = uint8_t;
+using ShiftT        = uint8_t;
 using RegisterT     = uint16_t;
 using ImmediateT    = uint32_t;
 #endif
@@ -47,10 +49,20 @@ enum InstOperator
     I_CALL,
     I_DELETE,
     I_DIV,
-    I_LOAD,
+    I_DIVU,
+    I_LOAD8,
+    I_LOAD8U,
+    I_LOAD16,
+    I_LOAD16U,
+    I_LOAD32,
+    I_LOAD32U,
+    I_LOAD64,
+    I_LOAD64U,
     I_MOD,
+    I_MODU,
     I_MOV,
     I_MUL,
+    I_MULU,
     I_NEW,
     I_NOR,
     I_OR,
@@ -59,36 +71,31 @@ enum InstOperator
     I_RET,
     I_SEQ,
     I_SHL,
+    I_SHLU,
     I_SHR,
+    I_SHRU,
     I_SLE,
+    I_SLEU,
     I_SLT,
-    I_STORE,
+    I_SLTU,
+    I_STORE8,
+    I_STORE8U,
+    I_STORE16,
+    I_STORE16U,
+    I_STORE32,
+    I_STORE32U,
+    I_STORE64,
+    I_STORE64U,
     I_SUB,
     I_XOR,
 
     InstOperator_NR
 };
 
-enum InstType
-{
-    T_SIGNED,
-    T_UNSIGNED,
-    T_POINTER
-};
-
-#define get_type(type, shift)   \
-    (((type) << 4) | (shift))
-
-#define type2type(type)         \
-    ((type) >> 4)
-
-#define type2shift(type)        \
-    ((type) & 0xF)
-
 struct Instruction
 {
     OperatorT           i_op;
-    TypeT               i_type;
+    ShiftT              i_shift;
     RegisterT           i_rd;
     union {
         ImmediateT      _imm;
@@ -98,12 +105,12 @@ struct Instruction
         } _regs;
     } _info;
 
-    Instruction(OperatorT op, TypeT type, RegisterT rd, ImmediateT imm)
-        : i_op(op), i_type(type), i_rd(rd)
+    Instruction(OperatorT op, ShiftT shift, RegisterT rd, ImmediateT imm)
+        : i_op(op), i_shift(shift), i_rd(rd)
     { _info._imm = imm; }
 
-    Instruction(OperatorT op, TypeT type, RegisterT rd, RegisterT rs, RegisterT rt)
-        : i_op(op), i_type(type), i_rd(rd)
+    Instruction(OperatorT op, ShiftT shift, RegisterT rd, RegisterT rs, RegisterT rt)
+        : i_op(op), i_shift(shift), i_rd(rd)
     {
         _info._regs._rs = rs;
         _info._regs._rt = rt;
@@ -140,11 +147,11 @@ struct Frame
 {
     VMFunction *func;
     std::vector<Slot> regs;
-    size_t stack_usage;
+    size_t frame_pointer;
     const Instruction *pc;
 
-    Frame(VMFunction *func)
-        : func(func), regs(func->register_nr, 0), stack_usage(0), pc(func->inst_list.data())
+    Frame(VMFunction *func, size_t frame_pointer)
+        : func(func), regs(func->register_nr, 0), frame_pointer(frame_pointer), pc(func->inst_list.data())
     { }
 
     inline Slot &
@@ -188,7 +195,6 @@ public:
         { }
 
         void generateFunc(::cyan::Function *func);
-        TypeT resolveType(::cyan::Instruction *inst);
     public:
         virtual std::ostream &generate(std::ostream &os);
         void generate();

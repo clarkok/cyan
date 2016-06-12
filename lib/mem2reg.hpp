@@ -18,19 +18,16 @@ class Mem2Reg : public Optimizer
 {
     std::map<intptr_t, Instruction *> argument_map;
     std::set<Instruction *> alloc_insts;
+    std::map<Instruction *, BasicBlock *> defined_block;
     std::map<BasicBlock *, Instruction *> version_map;
     std::map<Instruction *, Instruction *> value_map;
-    std::unique_ptr<Instruction> inst_to_replace;
-    std::set<Instruction *> scanned_phi;
+    std::list<std::unique_ptr<Instruction > > insts_to_remove;
 
     void allocaForArgument(Function *func);
     void scanAllAllocInst(Function *func);
     void filterAllocInst(Function *func);
     void performReplace(Function *func);
-    void replaceInBasicBlock(Function *func, BasicBlock *block, Instruction *inst);
-    Instruction *requestLatestValue(Function *func, BasicBlock *block, Instruction *inst);
-    Instruction *_phiScanner(PhiInst *phi_inst);
-    void resolveEmptyPhi(Function *func);
+    void replaceInBlock(Function *func, BasicBlock *block_ptr, Instruction *inst);
     void resolveMultipleReplace();
     void replaceUsage(Function *func);
 
