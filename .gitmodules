@@ -7,3 +7,6 @@
 [submodule "third-party/rlutil"]
 	path = third-party/rlutil
 	url = https://github.com/tapio/rlutil
+[submodule "third-party/xbyak"]
+	path = third-party/xbyak
+	url = https://github.com/herumi/xbyak

@@ -30,6 +30,7 @@ print_help()
         {"-d",                  "output debug info to stderr"},
         {"-e <GCC|IR|X64>",     "pass to GCC or emitting IR code or assembly"},
         {"-h",                  "print this help"},
+        {"-j",                  "run the code with JIT engine"},
         {"-o <file>",           "define output file"},
         {"-O0",                 "no optimization"},
         {"-O1",                 "basic optimization"},
@@ -68,6 +69,7 @@ struct Config
     std::vector<std::string> input_files;
     std::unique_ptr<Parser> parser;
     bool run;
+    bool jit;
     bool debug_out;
 
 private:
@@ -83,6 +85,7 @@ private:
           emit_code("GCC"),
           parser(new Parser(error_collector)),
           run(false),
+          jit(false),
           debug_out(false)
     { }
 
@@ -139,6 +142,9 @@ public:
                         exit(0);
                     case 'r':
                         ret->run = true;
+                        break;
+                    case 'j':
+                        ret->jit = true;
                         break;
                     case 'd':
                         ret->debug_out = true;
@@ -230,6 +236,17 @@ main(int argc, const char **argv)
         gen->generate();
         auto vm = gen->release();
         auto ret_val = vm->start();
+
+        std::cout << "exit with code " << ret_val << std::endl;
+        return ret_val;
+    }
+
+    if (config->jit) {
+        auto gen = vm::VirtualMachine::GenerateFactory(ir.release());
+        registerLibFunctions(gen.get());
+        gen->generate();
+        auto vm = gen->release();
+        auto ret_val = vm->startJIT();
 
         std::cout << "exit with code " << ret_val << std::endl;
         return ret_val;

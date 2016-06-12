@@ -1,5 +1,4 @@
 #include <cstdlib>
-
 #include "vm.hpp"
 
 using namespace cyan;
@@ -99,7 +98,7 @@ vm::VirtualMachine::Generate::generate()
             assert(_product->functions.find(func_pair.first) == _product->functions.end());
             _product->functions.emplace(
                 func_pair.first,
-                std::unique_ptr<Function>(new VMFunction())
+                std::unique_ptr<Function>(new VMFunction(func_pair.first))
             );
         }
         else {
@@ -1038,7 +1037,7 @@ vm::VirtualMachine::run()
                                                    (*current_frame)[inst->i_rt];
                     VM_DISPATCH();
                 }
-            VM_CASE(NEW)
+            VM_CASE(NEW);
                 {
                     (*current_frame)[inst->i_rd] = reinterpret_cast<Slot>(std::malloc((*current_frame)[inst->i_rs]));
                     VM_DISPATCH();
@@ -1209,6 +1208,536 @@ vm::VirtualMachine::start()
     assert(main_func);
     frame_stack.emplace(new Frame(main_func, stack_pointer));
     return run();
+}
+
+namespace cyan {
+namespace vm {
+
+Slot
+call_func(VirtualMachine *vm, Slot *arguments, Function *function)
+{
+    if (dynamic_cast<VMFunction*>(function)) {
+        auto vm_func = dynamic_cast<VMFunction*>(function);
+        vm->frame_stack.emplace(new Frame(vm_func, 0));
+
+        auto jit = vm->jit_results.at(function).get();
+        auto func = jit->getCode<JITFunction*>();
+        auto ret = func(
+            vm,
+            vm->frame_stack.top()->regs.data(),
+            reinterpret_cast<char*>(arguments),
+            vm->globals.data()
+        );
+
+        vm->frame_stack.pop();
+        return ret;
+    }
+    else {
+        auto lib_func = dynamic_cast<LibFunction*>(function);
+        return lib_func->call(arguments);
+    }
+};
+
+}
+}
+
+vm::Slot
+vm::VirtualMachine::startJIT()
+{
+    for (auto &func_pair : functions) {
+        if (dynamic_cast<VMFunction*>(func_pair.second.get())) {
+            functionJIT(dynamic_cast<VMFunction*>(func_pair.second.get()));
+        }
+    }
+    call_func(this, reinterpret_cast<Slot *>(stack.data() + stack_pointer), functions.at("_init_").get());
+    return call_func(this, reinterpret_cast<Slot *>(stack.data() + stack_pointer), functions.at("main").get());
+}
+
+void
+vm::VirtualMachine::functionJIT(VMFunction *vm_func)
+{
+    jit_results[vm_func].reset(new Xbyak::CodeGenerator(4096, Xbyak::AutoGrow));
+    auto jit = jit_results.at(vm_func).get();
+    std::set<size_t> label_list;
+
+    /**
+     * RDI  vm
+     * RSI  regs
+     * RDX  stack_base (aka. arguments)
+     * RCX  globals
+     * R8   stack_top
+     */
+
+    for (auto &inst : vm_func->inst_list) {
+        if (inst.i_op == I_BR || inst.i_op == I_BNR || inst.i_op == I_JUMP) {
+            label_list.emplace(inst.i_imm);
+        }
+    }
+
+    jit->mov(jit->r8, jit->rdx);
+    size_t counter = 0;
+    for (auto &inst : vm_func->inst_list) {
+        if (label_list.size()) {
+            if (counter++ == *label_list.begin()) {
+                jit->L(std::to_string(*label_list.begin()));
+                label_list.erase(label_list.begin());
+            }
+        }
+        switch (inst.i_op) {
+            case I_ARG:
+                {
+                    jit->lea(jit->rax, jit->qword[jit->rdx + inst.i_imm * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_BR:
+                {
+                    jit->cmp(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], 0);
+                    jit->jne(std::to_string(inst.i_imm), jit->T_NEAR);
+                    break;
+                }
+            case I_BNR:
+                {
+                    jit->cmp(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], 0);
+                    jit->je(std::to_string(inst.i_imm), jit->T_NEAR);
+                    break;
+                }
+            case I_GLOB:
+                {
+                    jit->lea(jit->rax, jit->qword[jit->rcx + inst.i_imm * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_JUMP:
+                {
+                    jit->jmp(std::to_string(inst.i_imm), jit->T_NEAR);
+                    break;
+                }
+            case I_LI:
+                {
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], inst.i_imm);
+                    break;
+                }
+            case I_ADD:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    if (inst.i_shift) {
+                        jit->sal(jit->rax, inst.i_shift);
+                    }
+                    jit->add(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_ALLOC:
+                {
+                    jit->sub(jit->r8, inst.i_imm * CYAN_PRODUCT_BYTES);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->r8);
+                    break;
+                }
+            case I_AND:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->and(jit->rax, jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_CALL:
+                {
+                    jit->push(jit->rdi);
+                    jit->push(jit->rsi);
+                    jit->push(jit->rdx);
+                    jit->push(jit->rcx);
+                    jit->push(jit->r8);
+
+                    jit->mov(jit->rdx, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->rsi, jit->r8);
+                    jit->call(call_func);
+
+                    jit->pop(jit->r8);
+                    jit->pop(jit->rcx);
+                    jit->pop(jit->rdx);
+                    jit->pop(jit->rsi);
+                    jit->pop(jit->rdi);
+
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_DELETE:
+                {
+                    jit->push(jit->rdi);
+                    jit->push(jit->rsi);
+                    jit->push(jit->rdx);
+                    jit->push(jit->rcx);
+                    jit->push(jit->r8);
+
+                    jit->mov(jit->rdi, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->call(std::free);
+
+                    jit->pop(jit->r8);
+                    jit->pop(jit->rcx);
+                    jit->pop(jit->rdx);
+                    jit->pop(jit->rsi);
+                    jit->pop(jit->rdi);
+                    break;
+                }
+            case I_DIV:
+                {
+                    jit->push(jit->rdx);
+
+                    jit->xor(jit->rdx, jit->rdx);
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->idiv(jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+
+                    jit->pop(jit->rdx);
+                    break;
+                }
+            case I_DIVU:
+                {
+                    jit->push(jit->rdx);
+
+                    jit->xor(jit->rdx, jit->rdx);
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->div(jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+
+                    jit->pop(jit->rdx);
+                    break;
+                }
+            case I_LOAD8:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->movsx(jit->rax, jit->byte[jit->rax]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_LOAD8U:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->movzx(jit->rax, jit->byte[jit->rax]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_LOAD16:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->movsx(jit->rax, jit->word[jit->rax]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_LOAD16U:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->movzx(jit->rax, jit->word[jit->rax]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_LOAD32:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->movsxd(jit->rax, jit->dword[jit->rax]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_LOAD32U:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->movzx(jit->rax, jit->dword[jit->rax]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_LOAD64:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->rax, jit->qword[jit->rax]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_LOAD64U:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->rax, jit->qword[jit->rax]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_MOD:
+                {
+                    jit->push(jit->rdx);
+
+                    jit->xor(jit->rdx, jit->rdx);
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->idiv(jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rdx);
+
+                    jit->pop(jit->rdx);
+                    break;
+                }
+            case I_MODU:
+                {
+                    jit->push(jit->rdx);
+
+                    jit->xor(jit->rdx, jit->rdx);
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->div(jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rdx);
+
+                    jit->pop(jit->rdx);
+                    break;
+                }
+            case I_MOV:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd *CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_MUL:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->imul(jit->rax, jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd *CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_MULU:
+                {
+                    jit->push(jit->rdx);
+
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->mul(jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd *CYAN_PRODUCT_BYTES], jit->rax);
+
+                    jit->pop(jit->rdx);
+                    break;
+                }
+            case I_NEW:
+                {
+                    jit->push(jit->rdi);
+                    jit->push(jit->rsi);
+                    jit->push(jit->rdx);
+                    jit->push(jit->rcx);
+                    jit->push(jit->r8);
+
+                    jit->mov(jit->rdi, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->call(std::malloc);
+
+                    jit->pop(jit->r8);
+                    jit->pop(jit->rcx);
+                    jit->pop(jit->rdx);
+                    jit->pop(jit->rsi);
+                    jit->pop(jit->rdi);
+
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_NOR:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->or(jit->rax, jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->not(jit->rax);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_OR:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->or(jit->rax, jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            case I_POP:
+                {
+                    jit->add(jit->r8, inst.i_imm * CYAN_PRODUCT_BYTES);
+                    break;
+                }
+            case I_PUSH:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES]);
+                    jit->sub(jit->r8, CYAN_PRODUCT_BYTES);
+                    jit->mov(jit->qword[jit->r8], jit->rax);
+                    break;
+                }
+            case I_RET:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->ret();
+                    break;
+                }
+            case I_SEQ:
+                {
+                    jit->mov(jit->r9, 1);
+                    jit->xor(jit->r10, jit->r10);
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->cmp(jit->rax, jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->cmove(jit->r10, jit->r9);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->r10);
+                    break;
+                }
+            case I_SHL:
+                {
+                    jit->push(jit->rcx);
+
+                    jit->mov(jit->cl, jit->byte[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->sal(jit->rax, jit->cl);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+
+                    jit->pop(jit->rcx);
+                    break;
+                }
+            case I_SHLU:
+                {
+                    jit->push(jit->rcx);
+
+                    jit->mov(jit->cl, jit->byte[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->shl(jit->rax, jit->cl);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+
+                    jit->pop(jit->rcx);
+                    break;
+                }
+            case I_SHR:
+                {
+                    jit->push(jit->rcx);
+
+                    jit->mov(jit->cl, jit->byte[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->sar(jit->rax, jit->cl);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+
+                    jit->pop(jit->rcx);
+                    break;
+                }
+            case I_SHRU:
+                {
+                    jit->push(jit->rcx);
+
+                    jit->mov(jit->cl, jit->byte[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->shr(jit->rax, jit->cl);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+
+                    jit->pop(jit->rcx);
+                    break;
+                }
+            case I_SLE:
+                {
+                    jit->mov(jit->r9, 1);
+                    jit->xor(jit->r10, jit->r10);
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->cmp(jit->rax, jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->cmovle(jit->r10, jit->r9);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->r10);
+                    break;
+                }
+            case I_SLEU:
+                {
+                    jit->mov(jit->r9, 1);
+                    jit->xor(jit->r10, jit->r10);
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->cmp(jit->rax, jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->cmovbe(jit->r10, jit->r9);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->r10);
+                    break;
+                }
+            case I_SLT:
+                {
+                    jit->mov(jit->r9, 1);
+                    jit->xor(jit->r10, jit->r10);
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->cmp(jit->rax, jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->cmovl(jit->r10, jit->r9);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->r10);
+                    break;
+                }
+            case I_SLTU:
+                {
+                    jit->mov(jit->r9, 1);
+                    jit->xor(jit->r10, jit->r10);
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->cmp(jit->rax, jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->cmovb(jit->r10, jit->r9);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->r10);
+                    break;
+                }
+            case I_STORE8:
+                {
+                    jit->mov(jit->ah, jit->byte[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->r9, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->byte[jit->r9], jit->ah);
+                    break;
+                }
+            case I_STORE8U:
+                {
+                    jit->mov(jit->ah, jit->byte[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->r9, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->byte[jit->r9], jit->ah);
+                    break;
+                }
+            case I_STORE16:
+                {
+                    jit->mov(jit->ax, jit->word[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->r9, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->word[jit->r9], jit->ax);
+                    break;
+                }
+            case I_STORE16U:
+                {
+                    jit->mov(jit->ax, jit->word[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->r9, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->word[jit->r9], jit->ax);
+                    break;
+                }
+            case I_STORE32:
+                {
+                    jit->mov(jit->eax, jit->dword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->r9, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->dword[jit->r9], jit->eax);
+                    break;
+                }
+            case I_STORE32U:
+                {
+                    jit->mov(jit->eax, jit->dword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->r9, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->dword[jit->r9], jit->eax);
+                    break;
+                }
+            case I_STORE64:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->r9, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->qword[jit->r9], jit->rax);
+                    break;
+                }
+            case I_STORE64U:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->r9, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->qword[jit->r9], jit->rax);
+                    break;
+                }
+            case I_SUB:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    if (inst.i_shift) {
+                        jit->sal(jit->rax, inst.i_shift);
+                    }
+                    jit->mov(jit->r9, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->sub(jit->r9, jit->rax);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->r9);
+                    break;
+                }
+            case I_XOR:
+                {
+                    jit->mov(jit->rax, jit->qword[jit->rsi + inst.i_rs * CYAN_PRODUCT_BYTES]);
+                    jit->xor(jit->rax, jit->qword[jit->rsi + inst.i_rt * CYAN_PRODUCT_BYTES]);
+                    jit->mov(jit->qword[jit->rsi + inst.i_rd * CYAN_PRODUCT_BYTES], jit->rax);
+                    break;
+                }
+            default:
+                assert(false);
+        }
+    }
+    jit->ready();
 }
 
 std::unique_ptr<vm::VirtualMachine::Generate>

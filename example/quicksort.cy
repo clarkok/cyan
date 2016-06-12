@@ -25,11 +25,6 @@ function partition(a : i64[], lo : i64, hi : i64) : i64 {
 
 function quicksort(a : i64[], lo : i64, hi : i64) {
     if (lo < hi) {
-        print_int(lo);
-        print_str("~");
-        print_int(hi);
-        print_str("\n");
-
         let p = partition(a, lo, hi);
         quicksort(a, lo, p - 1);
         quicksort(a, p + 1, hi);

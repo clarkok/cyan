@@ -10,6 +10,9 @@
 #include "cyan.hpp"
 #include "codegen.hpp"
 
+#define XBYAK_VARIADIC_TEMPLATE
+#include <xbyak/xbyak/xbyak.h>
+
 #define CYAN_USE_COMPUTED_GOTO  1
 
 namespace cyan {
@@ -127,6 +130,11 @@ using Slot = uintptr_t;
 using SignedSlot = intptr_t;
 using GlobalSegment = std::vector<Slot>;
 
+class VirtualMachine;
+class MovInst;
+
+using JITFunction = Slot(VirtualMachine *, Slot *, char *, Slot *);
+
 struct Function
 {
     virtual ~Function() = default;
@@ -136,6 +144,11 @@ struct VMFunction : Function
 {
     std::vector<Instruction> inst_list;
     size_t register_nr = 1;
+    std::string name;
+
+    VMFunction(std::string name)
+        : name(name)
+    { }
 };
 
 struct LibFunction : Function
@@ -159,7 +172,7 @@ struct Frame
     { return regs[index]; }
 };
 
-class MovInst;
+Slot call_func(VirtualMachine *vm, Slot *arguments, Function *function);
 
 class VirtualMachine
 {
@@ -173,8 +186,10 @@ private:
     std::array<char, STACK_SIZE> stack;
     size_t stack_pointer = STACK_SIZE;
     std::map<std::string, std::unique_ptr<Function> > functions;
+    std::map<Function *, std::unique_ptr<Xbyak::CodeGenerator> > jit_results;
 
     Slot run();
+    void functionJIT(VMFunction *vm_func);
 
     VirtualMachine() = default;
 public:
@@ -213,8 +228,10 @@ public:
     };
 
     Slot start();
+    Slot startJIT();
 
     static std::unique_ptr<Generate> GenerateFactory(IR *ir);
+    friend Slot ::cyan::vm::call_func(VirtualMachine *, Slot *, Function *);
 };
 
 }
